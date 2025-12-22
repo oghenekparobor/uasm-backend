@@ -1,0 +1,2085 @@
+{
+	"info": {
+		"_postman_id": "uams-api-collection",
+		"name": "UAMS API Collection",
+		"description": "Urban Alternative Management System - Complete API Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Ping",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ping",
+							"host": ["{{base_url}}"],
+							"path": ["ping"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"superadmin@uams.test\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "refresh"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "logout"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "me"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"currentPassword\": \"password123\",\n  \"newPassword\": \"newSecurePassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/change-password",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "change-password"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Request Password Reset",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/request-password-reset",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "request-password-reset"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"reset-token-from-email\",\n  \"newPassword\": \"newSecurePassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/reset-password",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "reset-password"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Users & Roles",
+			"item": [
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"worker@example.com\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"password\": \"securepassword123\",\n  \"phone\": \"+1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": ["{{base_url}}"],
+							"path": ["users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": ["{{base_url}}"],
+							"path": ["users"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/users/:id",
+							"host": ["{{base_url}}"],
+							"path": ["users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "user-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Smith\",\n  \"phone\": \"+1234567891\",\n  \"isActive\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/:id",
+							"host": ["{{base_url}}"],
+							"path": ["users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "user-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Role",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roleId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/:userId/roles",
+							"host": ["{{base_url}}"],
+							"path": ["users", ":userId", "roles"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "user-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Role",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/users/:userId/roles/:roleId",
+							"host": ["{{base_url}}"],
+							"path": ["users", ":userId", "roles", ":roleId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "user-uuid-here"
+								},
+								{
+									"key": "roleId",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Roles",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/users/:userId/roles",
+							"host": ["{{base_url}}"],
+							"path": ["users", ":userId", "roles"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "user-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Classes",
+			"item": [
+				{
+					"name": "Create Class",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Platoon Gamma\",\n  \"type\": \"PLATOON\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/classes",
+							"host": ["{{base_url}}"],
+							"path": ["classes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Classes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/classes",
+							"host": ["{{base_url}}"],
+							"path": ["classes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Class",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/classes/:id",
+							"host": ["{{base_url}}"],
+							"path": ["classes", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "class-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Class",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Class Name\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/classes/:id",
+							"host": ["{{base_url}}"],
+							"path": ["classes", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "class-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Leader",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"user-uuid-here\",\n  \"role\": \"LEADER\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/classes/:id/leaders",
+							"host": ["{{base_url}}"],
+							"path": ["classes", ":id", "leaders"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "class-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Leader",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/classes/:id/leaders/:userId/:role",
+							"host": ["{{base_url}}"],
+							"path": ["classes", ":id", "leaders", ":userId", ":role"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "class-uuid-here"
+								},
+								{
+									"key": "userId",
+									"value": "user-uuid-here"
+								},
+								{
+									"key": "role",
+									"value": "LEADER"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Members",
+			"item": [
+				{
+					"name": "Create Member",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"birthday\": \"1990-01-15\",\n  \"currentClassId\": \"class-uuid-here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/members",
+							"host": ["{{base_url}}"],
+							"path": ["members"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Members",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/members",
+							"host": ["{{base_url}}"],
+							"path": ["members"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Member",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/members/:id",
+							"host": ["{{base_url}}"],
+							"path": ["members", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "member-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Member",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Smith\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/members/:id",
+							"host": ["{{base_url}}"],
+							"path": ["members", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "member-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Transfer Member",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"toClassId\": \"new-class-uuid-here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/members/:id/transfer",
+							"host": ["{{base_url}}"],
+							"path": ["members", ":id", "transfer"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "member-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Member History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/members/:id/history",
+							"host": ["{{base_url}}"],
+							"path": ["members", ":id", "history"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "member-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Attendance",
+			"item": [
+				{
+					"name": "Open Attendance Window",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sundayDate\": \"2025-12-22\",\n  \"opensAt\": \"2025-12-22T08:00:00Z\",\n  \"closesAt\": \"2025-12-22T20:00:00Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/attendance/windows",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "windows"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Attendance Windows",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/attendance/windows",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "windows"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current Window",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/attendance/windows/current",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "windows", "current"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Attendance Window",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/attendance/windows/:id",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "windows", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "window-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Close Attendance Window",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/attendance/windows/:id/close",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "windows", ":id", "close"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "window-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Attendance",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"attendanceWindowId\": \"window-uuid-here\",\n  \"count\": 25\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/attendance/classes/:classId",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "classes", ":classId"],
+							"variable": [
+								{
+									"key": "classId",
+									"value": "class-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Class Attendance",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/attendance/classes/:classId?windowId=window-uuid-here",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "classes", ":classId"],
+							"query": [
+								{
+									"key": "windowId",
+									"value": "window-uuid-here"
+								}
+							],
+							"variable": [
+								{
+									"key": "classId",
+									"value": "class-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Attendance Summary",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/attendance/summary?windowId=window-uuid-here",
+							"host": ["{{base_url}}"],
+							"path": ["attendance", "summary"],
+							"query": [
+								{
+									"key": "windowId",
+									"value": "window-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Kitchen",
+			"item": [
+				{
+					"name": "Create Recipe",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Meal Pack A\",\n  \"description\": \"Standard meal pack\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/kitchen/recipes",
+							"host": ["{{base_url}}"],
+							"path": ["kitchen", "recipes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Recipes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/kitchen/recipes",
+							"host": ["{{base_url}}"],
+							"path": ["kitchen", "recipes"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Recipe",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/kitchen/recipes/:id",
+							"host": ["{{base_url}}"],
+							"path": ["kitchen", "recipes", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "recipe-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Log Production",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"recipeId\": \"recipe-uuid-here\",\n  \"quantity\": 100,\n  \"weekDate\": \"2025-12-22\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/kitchen/production",
+							"host": ["{{base_url}}"],
+							"path": ["kitchen", "production"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Production Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/kitchen/production?recipeId=recipe-uuid-here",
+							"host": ["{{base_url}}"],
+							"path": ["kitchen", "production"],
+							"query": [
+								{
+									"key": "recipeId",
+									"value": "recipe-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Distribution",
+			"item": [
+				{
+					"name": "Confirm Receipt",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"attendanceWindowId\": \"window-uuid-here\",\n  \"totalFoodReceived\": 500,\n  \"totalWaterReceived\": 300\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/distribution/batches",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "batches"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Batches",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/distribution/batches",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "batches"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current Batch",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/distribution/batches/current",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "batches", "current"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Batch",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/distribution/batches/:id",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "batches", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "batch-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Allocate Food & Water",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"foodAllocated\": 50,\n  \"waterAllocated\": 30,\n  \"allocationType\": \"ATTENDANCE_BASED\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/distribution/batches/:batchId/classes/:classId",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "batches", ":batchId", "classes", ":classId"],
+							"variable": [
+								{
+									"key": "batchId",
+									"value": "batch-uuid-here"
+								},
+								{
+									"key": "classId",
+									"value": "class-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Allocations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/distribution/allocations?batchId=batch-uuid-here&classId=class-uuid-here",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "allocations"],
+							"query": [
+								{
+									"key": "batchId",
+									"value": "batch-uuid-here"
+								},
+								{
+									"key": "classId",
+									"value": "class-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Allocation",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"foodAllocated\": 55,\n  \"waterAllocated\": 35\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/distribution/allocations/:id",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "allocations", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "allocation-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Distribution Overview",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/distribution/overview?batchId=batch-uuid-here",
+							"host": ["{{base_url}}"],
+							"path": ["distribution", "overview"],
+							"query": [
+								{
+									"key": "batchId",
+									"value": "batch-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Empowerment",
+			"item": [
+				{
+					"name": "Create Empowerment Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"memberId\": \"member-uuid-here\",\n  \"type\": \"SKILL_TRAINING\",\n  \"description\": \"Request for skill training\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/empowerment",
+							"host": ["{{base_url}}"],
+							"path": ["empowerment"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Empowerment Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/empowerment?memberId=member-uuid-here&status=PENDING",
+							"host": ["{{base_url}}"],
+							"path": ["empowerment"],
+							"query": [
+								{
+									"key": "memberId",
+									"value": "member-uuid-here"
+								},
+								{
+									"key": "status",
+									"value": "PENDING"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Empowerment Request",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/empowerment/:id",
+							"host": ["{{base_url}}"],
+							"path": ["empowerment", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "empowerment-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Empowerment",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"adminNotes\": \"Approved for skill training\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/empowerment/:id/approve",
+							"host": ["{{base_url}}"],
+							"path": ["empowerment", ":id", "approve"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "empowerment-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Empowerment",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"adminNotes\": \"Rejected due to insufficient resources\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/empowerment/:id/reject",
+							"host": ["{{base_url}}"],
+							"path": ["empowerment", ":id", "reject"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "empowerment-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Member Logs",
+			"item": [
+				{
+					"name": "Create Member Log",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Member attended training session\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/members/:id/logs",
+							"host": ["{{base_url}}"],
+							"path": ["members", ":id", "logs"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "member-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Member Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/members/:id/logs",
+							"host": ["{{base_url}}"],
+							"path": ["members", ":id", "logs"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "member-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Log",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/logs/:id",
+							"host": ["{{base_url}}"],
+							"path": ["logs", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "log-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Log",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Updated log entry\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/logs/:id",
+							"host": ["{{base_url}}"],
+							"path": ["logs", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "log-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Attachment (Upload File)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/logs/:id/attachments",
+							"host": ["{{base_url}}"],
+							"path": ["logs", ":id", "attachments"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "log-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Attachment (Manual URL)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fileUrl\": \"https://example.com/file.pdf\",\n  \"fileType\": \"PDF\",\n  \"fileSize\": 1024000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/logs/:id/attachments",
+							"host": ["{{base_url}}"],
+							"path": ["logs", ":id", "attachments"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "log-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Attachment",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/attachments/:id",
+							"host": ["{{base_url}}"],
+							"path": ["attachments", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "attachment-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Requests",
+			"item": [
+				{
+					"name": "Create Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"EQUIPMENT\",\n  \"description\": \"Need additional equipment\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/requests",
+							"host": ["{{base_url}}"],
+							"path": ["requests"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/requests/my",
+							"host": ["{{base_url}}"],
+							"path": ["requests", "my"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List All Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/requests?status=PENDING",
+							"host": ["{{base_url}}"],
+							"path": ["requests"],
+							"query": [
+								{
+									"key": "status",
+									"value": "PENDING"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Request",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/requests/:id",
+							"host": ["{{base_url}}"],
+							"path": ["requests", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "request-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Request",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"adminNotes\": \"Approved\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/requests/:id/approve",
+							"host": ["{{base_url}}"],
+							"path": ["requests", ":id", "approve"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "request-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Request",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"adminNotes\": \"Rejected\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/requests/:id/reject",
+							"host": ["{{base_url}}"],
+							"path": ["requests", ":id", "reject"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "request-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Events",
+			"item": [
+				{
+					"name": "Create Event",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Community Meeting\",\n  \"description\": \"Monthly community meeting\",\n  \"scope\": \"GLOBAL\",\n  \"isRecurring\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/events",
+							"host": ["{{base_url}}"],
+							"path": ["events"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Events",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/events",
+							"host": ["{{base_url}}"],
+							"path": ["events"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Event",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/events/:id",
+							"host": ["{{base_url}}"],
+							"path": ["events", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "event-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Event",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/events/:id/approve",
+							"host": ["{{base_url}}"],
+							"path": ["events", ":id", "approve"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "event-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Record Event Attendance",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"memberId\": \"member-uuid-here\",\n  \"attended\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/events/:id/attendance",
+							"host": ["{{base_url}}"],
+							"path": ["events", ":id", "attendance"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "event-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Event Attendance",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/events/:id/attendance",
+							"host": ["{{base_url}}"],
+							"path": ["events", ":id", "attendance"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "event-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"item": [
+				{
+					"name": "List Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/notifications",
+							"host": ["{{base_url}}"],
+							"path": ["notifications"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Notification as Read",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/notifications/:id/read",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", ":id", "read"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "notification-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "File Uploads",
+			"item": [
+				{
+					"name": "Get File URL",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/files/:publicId?width=800&height=600&format=webp&quality=80",
+							"host": ["{{base_url}}"],
+							"path": ["files", ":publicId"],
+							"query": [
+								{
+									"key": "width",
+									"value": "800"
+								},
+								{
+									"key": "height",
+									"value": "600"
+								},
+								{
+									"key": "format",
+									"value": "webp"
+								},
+								{
+									"key": "quality",
+									"value": "80"
+								}
+							],
+							"variable": [
+								{
+									"key": "publicId",
+									"value": "uams/member-logs/log-id/image"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Activity Logs",
+			"item": [
+				{
+					"name": "List Activity Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activity-logs?actorId=user-uuid-here&entityType=member&entityId=member-uuid-here",
+							"host": ["{{base_url}}"],
+							"path": ["activity-logs"],
+							"query": [
+								{
+									"key": "actorId",
+									"value": "user-uuid-here"
+								},
+								{
+									"key": "entityType",
+									"value": "member"
+								},
+								{
+									"key": "entityId",
+									"value": "member-uuid-here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Activity Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activity-logs/me",
+							"host": ["{{base_url}}"],
+							"path": ["activity-logs", "me"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
