@@ -16,6 +16,8 @@ import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { AssignLeaderDto } from './dto/assign-leader.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuthUser } from '../auth/auth-user.decorator';
+import { AuthenticatedUser } from '../../common/types/auth-user.type';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 @Controller('classes')
@@ -30,8 +32,8 @@ export class ClassesController {
   }
 
   @Get()
-  findAll(@Query() pagination: PaginationDto) {
-    return this.classesService.findAll(pagination);
+  findAll(@Query() pagination: PaginationDto, @AuthUser() user: AuthenticatedUser) {
+    return this.classesService.findAll(pagination, user);
   }
 
   @Get(':id')

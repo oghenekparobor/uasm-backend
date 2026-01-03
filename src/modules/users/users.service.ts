@@ -101,6 +101,19 @@ export class UsersService {
       where.isActive = filters.isActive;
     }
 
+    // Role filter
+    if (filters.roles && filters.roles.length > 0) {
+      where.userRoles = {
+        some: {
+          role: {
+            name: {
+              in: filters.roles,
+            },
+          },
+        },
+      };
+    }
+
     // Date range filter
     const dateFilter = buildDateRangeFilter(filters.dateFrom, filters.dateTo, 'createdAt');
     if (dateFilter) {
@@ -114,7 +127,7 @@ export class UsersService {
     const orderBy = buildSortOrder(filters.sortBy, filters.sortOrder, 'lastName', 'asc');
 
     // RLS filters based on role
-    const data = await this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       skip,
       take,
       where,
@@ -133,6 +146,18 @@ export class UsersService {
         },
       },
       orderBy,
+    });
+
+    // Transform userRoles to roles format expected by frontend
+    const data = users.map((user) => {
+      const { userRoles, ...userData } = user;
+      return {
+        ...userData,
+        roles: userRoles.map((ur) => ({
+          id: ur.roleId,
+          role: ur.role.name,
+        })),
+      };
     });
 
     return {
@@ -170,7 +195,15 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return user;
+    // Transform userRoles to roles format expected by frontend
+    const { userRoles, ...userData } = user;
+    return {
+      ...userData,
+      roles: userRoles.map((ur) => ({
+        id: ur.roleId,
+        role: ur.role.name,
+      })),
+    };
   }
 
   async update(id: string, dto: UpdateUserDto) {

@@ -31,8 +31,8 @@ export class MembersController {
   }
 
   @Get()
-  findAll(@Query() filters: MemberFilterDto) {
-    return this.membersService.findAll(filters);
+  findAll(@Query() filters: MemberFilterDto, @AuthUser() user: AuthenticatedUser) {
+    return this.membersService.findAll(filters, user);
   }
 
   @Get(':id')
@@ -41,8 +41,12 @@ export class MembersController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateMemberDto: UpdateMemberDto) {
-    return this.membersService.update(id, updateMemberDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateMemberDto: UpdateMemberDto,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.update(id, updateMemberDto, user);
   }
 
   @Post(':id/transfer')

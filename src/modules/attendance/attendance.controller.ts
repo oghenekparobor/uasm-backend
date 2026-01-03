@@ -13,6 +13,7 @@ import {
 import { AttendanceService } from './attendance.service';
 import { OpenAttendanceWindowDto } from './dto/open-attendance-window.dto';
 import { TakeAttendanceDto } from './dto/take-attendance.dto';
+import { MarkMemberAttendanceDto, BulkMarkAttendanceDto } from './dto/mark-member-attendance.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser } from '../auth/auth-user.decorator';
 import { AuthenticatedUser } from '../../common/types/auth-user.type';
@@ -89,6 +90,44 @@ export class AttendanceController {
   @Get()
   findAll(@Query() query: AttendanceQueryDto) {
     return this.attendanceService.findAllAttendance(query.classId, query.windowId, query);
+  }
+
+  // ============================================
+  // Individual Member Attendance Endpoints
+  // ============================================
+
+  @Post('members')
+  @HttpCode(HttpStatus.CREATED)
+  markMemberAttendance(
+    @Body() dto: MarkMemberAttendanceDto,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.attendanceService.markMemberAttendance(dto, user);
+  }
+
+  @Post('members/bulk')
+  @HttpCode(HttpStatus.CREATED)
+  bulkMarkAttendance(
+    @Body() dto: BulkMarkAttendanceDto,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.attendanceService.bulkMarkAttendance(dto, user);
+  }
+
+  @Get('classes/:classId/windows/:windowId/members')
+  getClassMembersAttendance(
+    @Param('classId') classId: string,
+    @Param('windowId') windowId: string,
+  ) {
+    return this.attendanceService.getClassMembersAttendance(classId, windowId);
+  }
+
+  @Get('members/:memberId/history')
+  getMemberAttendanceHistory(
+    @Param('memberId') memberId: string,
+    @Query() filters?: BaseFilterDto,
+  ) {
+    return this.attendanceService.getMemberAttendanceHistory(memberId, filters);
   }
 }
 

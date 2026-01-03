@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenAttendanceWindowDto } from './dto/open-attendance-window.dto';
 import { TakeAttendanceDto } from './dto/take-attendance.dto';
+import { MarkMemberAttendanceDto, BulkMarkAttendanceDto } from './dto/mark-member-attendance.dto';
 import { AuthenticatedUser } from '../../common/types/auth-user.type';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { PaginationDto, getPaginationParams, createPaginationMeta, PaginatedResponse } from '../../common/dto/pagination.dto';
@@ -41,7 +42,7 @@ export class AttendanceService {
 
   async findAllWindows() {
     // RLS filters based on role
-    return this.prisma.attendanceWindow.findMany({
+    const windows = await this.prisma.attendanceWindow.findMany({
       orderBy: {
         sundayDate: 'desc',
       },
@@ -55,6 +56,13 @@ export class AttendanceService {
         },
       },
     });
+
+    // Calculate isOpen based on current time
+    const now = new Date();
+    return windows.map((window) => ({
+      ...window,
+      isOpen: now >= window.opensAt && now <= window.closesAt,
+    }));
   }
 
   async findOneWindow(id: string) {
@@ -87,7 +95,12 @@ export class AttendanceService {
       throw new NotFoundException(`Attendance window with ID ${id} not found`);
     }
 
-    return window;
+    // Calculate isOpen based on current time
+    const now = new Date();
+    return {
+      ...window,
+      isOpen: now >= window.opensAt && now <= window.closesAt,
+    };
   }
 
   async takeAttendance(dto: TakeAttendanceDto, user: AuthenticatedUser) {
@@ -196,7 +209,7 @@ export class AttendanceService {
   async findCurrentWindow() {
     const now = new Date();
     // RLS filters based on role
-    return this.prisma.attendanceWindow.findFirst({
+    const window = await this.prisma.attendanceWindow.findFirst({
       where: {
         opensAt: { lte: now },
         closesAt: { gte: now },
@@ -219,6 +232,16 @@ export class AttendanceService {
         sundayDate: 'desc',
       },
     });
+
+    if (!window) {
+      return null;
+    }
+
+    // Add isOpen field (by definition, this window is open)
+    return {
+      ...window,
+      isOpen: true,
+    };
   }
 
   async closeWindow(id: string) {
@@ -278,6 +301,214 @@ export class AttendanceService {
           count: a.count,
         })),
       },
+    };
+  }
+
+  // ============================================
+  // Individual Member Attendance Methods
+  // ============================================
+
+  async markMemberAttendance(dto: MarkMemberAttendanceDto, user: AuthenticatedUser) {
+    // Verify window exists and is currently open
+    const window = await this.prisma.attendanceWindow.findUnique({
+      where: { id: dto.attendanceWindowId },
+    });
+
+    if (!window) {
+      throw new NotFoundException(`Attendance window with ID ${dto.attendanceWindowId} not found`);
+    }
+
+    const now = new Date();
+    if (now < window.opensAt || now > window.closesAt) {
+      throw new BadRequestException('Attendance window is not currently open');
+    }
+
+    // Verify member exists and belongs to the class
+    const member = await this.prisma.member.findUnique({
+      where: { id: dto.memberId },
+    });
+
+    if (!member) {
+      throw new NotFoundException(`Member with ID ${dto.memberId} not found`);
+    }
+
+    if (member.currentClassId !== dto.classId) {
+      throw new BadRequestException('Member does not belong to this class');
+    }
+
+    // Mark or update attendance
+    const attendance = await this.prisma.memberAttendance.upsert({
+      where: {
+        memberId_attendanceWindowId: {
+          memberId: dto.memberId,
+          attendanceWindowId: dto.attendanceWindowId,
+        },
+      },
+      create: {
+        memberId: dto.memberId,
+        classId: dto.classId,
+        attendanceWindowId: dto.attendanceWindowId,
+        status: dto.status,
+        markedBy: user.id,
+        notes: dto.notes,
+      },
+      update: {
+        status: dto.status,
+        markedBy: user.id,
+        markedAt: new Date(),
+        notes: dto.notes,
+      },
+      include: {
+        member: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    return attendance;
+  }
+
+  async bulkMarkAttendance(dto: BulkMarkAttendanceDto, user: AuthenticatedUser) {
+    // Verify window exists and is currently open
+    const window = await this.prisma.attendanceWindow.findUnique({
+      where: { id: dto.attendanceWindowId },
+    });
+
+    if (!window) {
+      throw new NotFoundException(`Attendance window with ID ${dto.attendanceWindowId} not found`);
+    }
+
+    const now = new Date();
+    if (now < window.opensAt || now > window.closesAt) {
+      throw new BadRequestException('Attendance window is not currently open');
+    }
+
+    // Mark attendance for all members
+    const results = await Promise.all(
+      dto.attendance.map((record) =>
+        this.markMemberAttendance(
+          {
+            memberId: record.memberId,
+            classId: dto.classId,
+            attendanceWindowId: dto.attendanceWindowId,
+            status: record.status,
+            notes: record.notes,
+          },
+          user
+        )
+      )
+    );
+
+    return {
+      success: true,
+      marked: results.length,
+      records: results,
+    };
+  }
+
+  async getClassMembersAttendance(classId: string, windowId: string) {
+    // Get all members in the class
+    const members = await this.prisma.member.findMany({
+      where: { currentClassId: classId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        birthday: true,
+      },
+      orderBy: {
+        lastName: 'asc',
+      },
+    });
+
+    // Get attendance records for this window
+    const attendanceRecords = await this.prisma.memberAttendance.findMany({
+      where: {
+        classId,
+        attendanceWindowId: windowId,
+      },
+      include: {
+        member: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    // Map attendance to members
+    const attendanceMap = new Map(
+      attendanceRecords.map((record) => [record.memberId, record])
+    );
+
+    return members.map((member) => ({
+      ...member,
+      attendance: attendanceMap.get(member.id) || null,
+    }));
+  }
+
+  async getMemberAttendanceHistory(memberId: string, filters?: any): Promise<PaginatedResponse<any>> {
+    const { skip, take, page, limit } = getPaginationParams(filters || {});
+
+    const where: any = {
+      memberId,
+    };
+
+    // Date range filter (on markedAt)
+    const dateFilter = buildDateRangeFilter(filters?.dateFrom, filters?.dateTo, 'markedAt');
+    if (dateFilter) {
+      Object.assign(where, dateFilter);
+    }
+
+    const total = await this.prisma.memberAttendance.count({ where });
+
+    const orderBy = buildSortOrder(filters?.sortBy, filters?.sortOrder, 'markedAt', 'desc');
+
+    const data = await this.prisma.memberAttendance.findMany({
+      skip,
+      take,
+      where,
+      include: {
+        class: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+        attendanceWindow: {
+          select: {
+            id: true,
+            sundayDate: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy,
+    });
+
+    return {
+      data,
+      meta: createPaginationMeta(total, page, limit),
     };
   }
 }

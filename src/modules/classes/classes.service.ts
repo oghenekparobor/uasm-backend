@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { AssignLeaderDto } from './dto/assign-leader.dto';
+import { AuthenticatedUser } from '../../common/types/auth-user.type';
 import { PaginationDto, getPaginationParams, createPaginationMeta, PaginatedResponse } from '../../common/dto/pagination.dto';
 
 @Injectable()
@@ -35,14 +36,27 @@ export class ClassesService {
     });
   }
 
-  async findAll(pagination?: PaginationDto): Promise<PaginatedResponse<any>> {
+  async findAll(pagination?: PaginationDto, user?: AuthenticatedUser): Promise<PaginatedResponse<any>> {
     const { skip, take, page, limit } = getPaginationParams(pagination || {});
 
-    // Get total count for pagination metadata
-    const total = await this.prisma.class.count();
+    // Build where clause based on user role
+    const where: any = {};
+    
+    // If user is not admin/super_admin, filter to only show classes they're assigned to
+    if (user && user.role !== 'admin' && user.role !== 'super_admin') {
+      where.classLeaders = {
+        some: {
+          userId: user.id,
+        },
+      };
+    }
 
-    // RLS filters: admin sees all, leaders see only assigned
+    // Get total count for pagination metadata
+    const total = await this.prisma.class.count({ where });
+
+    // Fetch classes with filtering
     const data = await this.prisma.class.findMany({
+      where,
       skip,
       take,
       include: {

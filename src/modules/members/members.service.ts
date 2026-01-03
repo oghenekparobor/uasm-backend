@@ -23,7 +23,7 @@ export class MembersService {
 
   async create(dto: CreateMemberDto, user: AuthenticatedUser) {
     // RLS will enforce that user can only create members in their platoons
-    return this.prisma.withRLSContext(async (tx) => {
+    return this.prisma.withRLSContext(user, async (tx) => {
       return tx.member.create({
         data: {
           firstName: dto.firstName,
@@ -35,11 +35,63 @@ export class MembersService {
     });
   }
 
-  async findAll(filters: MemberFilterDto): Promise<PaginatedResponse<any>> {
+  async findAll(filters: MemberFilterDto, user?: AuthenticatedUser): Promise<PaginatedResponse<any>> {
     const { skip, take, page, limit } = getPaginationParams(filters);
 
     // Build where clause
     const where: any = {};
+
+    // If user is not admin/super_admin, filter to only show members from classes they're assigned to
+    if (user && user.role !== 'admin' && user.role !== 'super_admin') {
+      // Get class IDs where user is assigned as a leader
+      const userClassLeaders = await this.prisma.classLeader.findMany({
+        where: {
+          userId: user.id,
+        },
+        select: {
+          classId: true,
+        },
+      });
+
+      const userClassIds = userClassLeaders.map((cl) => cl.classId);
+
+      if (userClassIds.length > 0) {
+        // If user has assigned classes, filter members by those classes
+        // If currentClassIds is already set in filters, intersect with user's classes
+        if (filters.currentClassIds && filters.currentClassIds.length > 0) {
+          const intersection = filters.currentClassIds.filter((id) => userClassIds.includes(id));
+          where.currentClassId = intersection.length > 0 ? { in: intersection } : { in: [] };
+        } else if (filters.currentClassId) {
+          // If single class ID is set, check if user has access to it
+          if (userClassIds.includes(filters.currentClassId)) {
+            where.currentClassId = filters.currentClassId;
+          } else {
+            // User doesn't have access to this class, return empty result
+            where.currentClassId = { in: [] };
+          }
+        } else {
+          // No class filter specified, show all members from user's classes
+          where.currentClassId = {
+            in: userClassIds,
+          };
+        }
+      } else {
+        // User has no assigned classes, return empty result
+        where.currentClassId = { in: [] };
+      }
+    } else {
+      // Admin/super_admin: apply class filters if specified
+      if (filters.currentClassId) {
+        where.currentClassId = filters.currentClassId;
+      }
+
+      // Multiple class IDs filter
+      if (filters.currentClassIds && filters.currentClassIds.length > 0) {
+        where.currentClassId = {
+          in: filters.currentClassIds,
+        };
+      }
+    }
 
     // Text search
     const searchFields = parseSearchFields(filters.searchFields || 'firstName,lastName');
@@ -63,8 +115,10 @@ export class MembersService {
       };
     }
 
-    if (filters.currentClassId) {
-      where.currentClassId = filters.currentClassId;
+    // Birthday date range filter
+    const birthdayFilter = buildDateRangeFilter(filters.birthdayFrom, filters.birthdayTo, 'birthday');
+    if (birthdayFilter) {
+      Object.assign(where, birthdayFilter);
     }
 
     // Date range filter (on createdAt)
@@ -127,9 +181,9 @@ export class MembersService {
     return member;
   }
 
-  async update(id: string, dto: UpdateMemberDto) {
+  async update(id: string, dto: UpdateMemberDto, user: AuthenticatedUser) {
     // RLS ensures user can only update members in their platoons
-    return this.prisma.withRLSContext(async (tx) => {
+    return this.prisma.withRLSContext(user, async (tx) => {
       return tx.member.update({
         where: { id },
         data: {
@@ -144,7 +198,7 @@ export class MembersService {
 
   async transfer(id: string, dto: TransferMemberDto, user: AuthenticatedUser) {
     // RLS ensures only admin/super_admin can transfer members
-    return this.prisma.withRLSContext(async (tx) => {
+    return this.prisma.withRLSContext(user, async (tx) => {
       // Get current member to record transfer history (within transaction with RLS context)
       const member = await tx.member.findUnique({
         where: { id },

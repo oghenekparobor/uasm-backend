@@ -782,6 +782,96 @@ WITH CHECK (
   )
 );
 
+
+-- =========================
+-- class_offerings
+-- =========================
+
+ALTER TABLE "class_offerings" ENABLE ROW LEVEL SECURITY;
+
+-- Policy: admin and super_admin have full access to class_offerings
+CREATE POLICY class_offerings_admin_full
+ON "class_offerings"
+FOR ALL
+USING (
+  (current_setting('request.jwt.claims', true)::json->>'role') IN ('admin', 'super_admin')
+)
+WITH CHECK (
+  (current_setting('request.jwt.claims', true)::json->>'role') IN ('admin', 'super_admin')
+);
+
+-- Policy: leaders/teachers can view offerings for their classes
+CREATE POLICY class_offerings_leaders_select
+ON "class_offerings"
+FOR SELECT
+USING (
+  (current_setting('request.jwt.claims', true)::json->>'role') IN (
+    'platoon_leader',
+    'assistant_platoon_leader',
+    'children_teacher'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM json_array_elements_text(
+      current_setting('request.jwt.claims', true)::json->'platoon_ids'
+    ) AS pid(value)
+    WHERE pid.value::uuid = "class_offerings".class_id
+  )
+);
+
+-- Policy: leaders/teachers can create and update offerings for their classes
+CREATE POLICY class_offerings_leaders_insert
+ON "class_offerings"
+FOR INSERT
+WITH CHECK (
+  (current_setting('request.jwt.claims', true)::json->>'role') IN (
+    'platoon_leader',
+    'assistant_platoon_leader',
+    'children_teacher'
+  )
+  AND recorded_by = (current_setting('request.jwt.claims', true)::json->>'sub')::uuid
+  AND EXISTS (
+    SELECT 1
+    FROM json_array_elements_text(
+      current_setting('request.jwt.claims', true)::json->'platoon_ids'
+    ) AS pid(value)
+    WHERE pid.value::uuid = "class_offerings".class_id
+  )
+);
+
+CREATE POLICY class_offerings_leaders_update
+ON "class_offerings"
+FOR UPDATE
+USING (
+  (current_setting('request.jwt.claims', true)::json->>'role') IN (
+    'platoon_leader',
+    'assistant_platoon_leader',
+    'children_teacher'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM json_array_elements_text(
+      current_setting('request.jwt.claims', true)::json->'platoon_ids'
+    ) AS pid(value)
+    WHERE pid.value::uuid = "class_offerings".class_id
+  )
+)
+WITH CHECK (
+  (current_setting('request.jwt.claims', true)::json->>'role') IN (
+    'platoon_leader',
+    'assistant_platoon_leader',
+    'children_teacher'
+  )
+  AND recorded_by = (current_setting('request.jwt.claims', true)::json->>'sub')::uuid
+  AND EXISTS (
+    SELECT 1
+    FROM json_array_elements_text(
+      current_setting('request.jwt.claims', true)::json->'platoon_ids'
+    ) AS pid(value)
+    WHERE pid.value::uuid = "class_offerings".class_id
+  )
+);
+
 CREATE POLICY member_logs_leaders_update
 ON "member_logs"
 FOR UPDATE

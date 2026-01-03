@@ -5,7 +5,6 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
-import { isUUID } from 'class-validator';
 
 @ValidatorConstraint({ name: 'isUuid', async: false })
 export class IsUuidConstraint implements ValidatorConstraintInterface {
@@ -13,7 +12,13 @@ export class IsUuidConstraint implements ValidatorConstraintInterface {
     if (value === null || value === undefined) {
       return true; // Let @IsOptional handle null/undefined
     }
-    return isUUID(value);
+    // Check if value is a string with UUID format (8-4-4-4-12 hexadecimal characters)
+    // This is more lenient than strict UUID validation to support test/seed UUIDs
+    if (typeof value !== 'string') {
+      return false;
+    }
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(value);
   }
 
   defaultMessage(args: ValidationArguments) {

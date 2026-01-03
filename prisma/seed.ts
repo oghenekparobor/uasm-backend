@@ -203,30 +203,30 @@ async function main() {
   console.log('🏛️ Creating classes/platoons...');
 
   const platoon1 = await prisma.class.upsert({
-    where: { id: '00000000-0000-0000-0000-00000000aaaa' },
+    where: { id: 'a6a365dc-f802-4615-ba50-dfb0314243b4' },
     update: {},
     create: {
-      id: '00000000-0000-0000-0000-00000000aaaa',
+      id: 'a6a365dc-f802-4615-ba50-dfb0314243b4',
       name: 'Platoon Alpha',
       type: 'PLATOON',
     },
   });
 
   const platoon2 = await prisma.class.upsert({
-    where: { id: '00000000-0000-0000-0000-00000000bbbb' },
+    where: { id: '0cb1d155-9ed5-47f8-af96-418b6219ce2e' },
     update: {},
     create: {
-      id: '00000000-0000-0000-0000-00000000bbbb',
+      id: '0cb1d155-9ed5-47f8-af96-418b6219ce2e',
       name: 'Platoon Beta',
       type: 'PLATOON',
     },
   });
 
   const childrenClass1 = await prisma.class.upsert({
-    where: { id: '00000000-0000-0000-0000-00000000cccc' },
+    where: { id: '0b05d520-e370-49b7-8f76-10575233da4b' },
     update: {},
     create: {
-      id: '00000000-0000-0000-0000-00000000cccc',
+      id: '0b05d520-e370-49b7-8f76-10575233da4b',
       name: "Children's Class A",
       type: 'CHILDREN',
     },
@@ -297,11 +297,11 @@ async function main() {
 
   // Create members for Platoon Alpha
   const memberIdsAlpha = [
-    '00000000-0000-0000-0000-00000000001a',
-    '00000000-0000-0000-0000-00000000002a',
-    '00000000-0000-0000-0000-00000000003a',
-    '00000000-0000-0000-0000-00000000004a',
-    '00000000-0000-0000-0000-00000000005a',
+    'e74c9e6f-c458-4f6c-b73a-242242a3f08a',
+    'ed95f6a1-6776-4ab4-8df6-fff635b5ec7a',
+    'ed3a8acd-e248-475e-9529-67ea4b366c58',
+    '3cbe2f44-7f40-4f19-a7bc-e38cc928579f',
+    'b5d0ce3a-d3d1-4959-bfc4-2e27882a0bea',
   ];
 
   for (let i = 0; i < 5; i++) {
@@ -322,11 +322,11 @@ async function main() {
 
   // Create members for Platoon Beta
   const memberIdsBeta = [
-    '00000000-0000-0000-0000-00000000001b',
-    '00000000-0000-0000-0000-00000000002b',
-    '00000000-0000-0000-0000-00000000003b',
-    '00000000-0000-0000-0000-00000000004b',
-    '00000000-0000-0000-0000-00000000005b',
+    '0e899698-e3b7-42ed-9998-189538e3ddae',
+    'f36b8e7f-5ba8-4118-b129-c2103820f218',
+    '2a89b666-2e37-4321-bcee-5e54016d5dad',
+    '032da386-727a-4bc2-8b9d-eb0788db6d7d',
+    'f943e464-fe8c-4452-8f53-93ab0faa8f95',
   ];
 
   for (let i = 5; i < 10; i++) {
@@ -347,11 +347,11 @@ async function main() {
 
   // Create children members
   const memberIdsChildren = [
-    '00000000-0000-0000-0000-00000000001c',
-    '00000000-0000-0000-0000-00000000002c',
-    '00000000-0000-0000-0000-00000000003c',
-    '00000000-0000-0000-0000-00000000004c',
-    '00000000-0000-0000-0000-00000000005c',
+    '32bbff18-c4dd-4a40-bad4-64a72de8feb0',
+    '3ab95f57-f518-401d-a14b-870c1cb31de1',
+    '7a5557b2-3cd2-42f1-ac64-3776b298fd92',
+    '66986c59-9389-4310-98a6-7b7369a1a81d',
+    '4ccee46b-a1fa-4e60-a464-d489f041801b',
   ];
 
   for (let i = 0; i < childrenNames.length; i++) {

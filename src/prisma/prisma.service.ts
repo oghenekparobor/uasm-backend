@@ -2,13 +2,9 @@ import {
   Injectable,
   OnModuleInit,
   OnModuleDestroy,
-  Scope,
-  Inject,
   Logger,
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { REQUEST } from '@nestjs/core';
-import { Request } from 'express';
 import { AuthenticatedUser } from '../common/types/auth-user.type';
 
 export interface JwtClaims {
@@ -18,16 +14,19 @@ export interface JwtClaims {
   platoon_ids?: string[];
 }
 
-@Injectable({ scope: Scope.REQUEST })
+@Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
-  constructor(@Inject(REQUEST) private readonly httpRequest: Request) {
-    super();
+  constructor() {
+    super({
+      log: ['warn', 'error'],
+    });
   }
 
   async onModuleInit() {
     await this.$connect();
+    this.logger.log('Database connection established');
     
     // NOTE: We do NOT use middleware here because Prisma's connection pooling
     // means the context-setting query and the actual query might use different connections.
@@ -39,34 +38,38 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     // that need RLS enforcement.
   }
   
-  private getRLSClaims(): JwtClaims | null {
-    // Try to get RLS claims from user_rls first (set by JwtAuthGuard), fallback to user
-    const rlsClaims = (this.httpRequest as any).user_rls as JwtClaims | undefined;
-    const user = (this.httpRequest as any).user as AuthenticatedUser | undefined;
-
-    if (!rlsClaims && !user) {
+  private getRLSClaimsFromUser(user: AuthenticatedUser | JwtClaims | undefined): JwtClaims | null {
+    if (!user) {
       return null;
     }
 
-    // Use RLS claims if available, otherwise construct from AuthenticatedUser
-    return rlsClaims || {
-      sub: user!.id,
-      role: user!.role,
-      worker_id: user!.workerId ?? null,
-      platoon_ids: user!.platoonIds ?? [],
+    // Check if it's already JwtClaims format
+    if ('sub' in user) {
+      return user as JwtClaims;
+    }
+
+    // Convert AuthenticatedUser to JwtClaims
+    const authUser = user as AuthenticatedUser;
+    return {
+      sub: authUser.id,
+      role: authUser.role,
+      worker_id: authUser.workerId ?? null,
+      platoon_ids: authUser.platoonIds ?? [],
     };
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
+    this.logger.log('Database connection closed');
   }
 
   /**
    * Public method for explicit context setting (called by JwtAuthGuard)
    * This ensures context is set even before middleware runs
+   * @deprecated This method is not reliable with connection pooling. Use withRLSContext instead.
    */
-  async setRequestContext(): Promise<void> {
-    const claims = this.getRLSClaims();
+  async setRequestContext(user?: AuthenticatedUser | JwtClaims): Promise<void> {
+    const claims = this.getRLSClaimsFromUser(user);
     if (claims) {
       await this.$executeRawUnsafe(
         `SELECT set_config('request.jwt.claims', $1, true)`,
@@ -85,9 +88,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    * 
    * CRITICAL: This is the ONLY reliable way to ensure RLS works with Prisma's connection pooling.
    * All write operations that need RLS enforcement MUST use this method.
+   * 
+   * @param userOrFn - The authenticated user/JWT claims, OR the function to execute (for backward compat)
+   * @param fn - The function to execute within the transaction (optional if first param is function)
    */
-  async withRLSContext<T>(fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>): Promise<T> {
-    const claims = this.getRLSClaims();
+  async withRLSContext<T>(
+    userOrFn: AuthenticatedUser | JwtClaims | undefined | ((tx: any) => Promise<T>),
+    fn?: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
+  ): Promise<T> {
+    // Handle backward compatibility: if first param is a function, use it as the fn with no user context
+    let user: AuthenticatedUser | JwtClaims | undefined;
+    let actualFn: (tx: any) => Promise<T>;
+    
+    if (typeof userOrFn === 'function') {
+      user = undefined;
+      actualFn = userOrFn;
+      this.logger.warn('withRLSContext called without user context. This may bypass RLS policies.');
+    } else {
+      user = userOrFn;
+      actualFn = fn!;
+    }
+    
+    const claims = this.getRLSClaimsFromUser(user);
     
     return this.$transaction(async (tx) => {
       // Set RLS context at the START of the transaction on the same connection
@@ -107,9 +129,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       
       // Execute the function with RLS context set
       // All queries in fn() will use the same connection and have the RLS context
-      return fn(tx);
+      return actualFn(tx);
     });
   }
 
 }
+
 

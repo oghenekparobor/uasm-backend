@@ -37,6 +37,7 @@ export class DashboardService {
         totalEvents: await this.getTotalEvents(dateFilter),
         attendanceStats: await this.getAttendanceStats(dateFilter),
         distributionStats: await this.getDistributionStats(dateFilter),
+        offeringsStats: await this.getOfferingsStats(dateFilter),
       };
     }
 
@@ -334,6 +335,30 @@ export class DashboardService {
       totalProductionLogs: productionLogs.length,
       totalProduction,
       averageProduction: productionLogs.length > 0 ? totalProduction / productionLogs.length : 0,
+    };
+  }
+
+  private async getOfferingsStats(dateFilter?: { gte: Date; lte: Date }) {
+    const where: any = {};
+    if (dateFilter) {
+      where.recordedAt = dateFilter;
+    }
+
+    const totalRecords = await this.prisma.classOffering.count({ where });
+
+    const totals = await this.prisma.classOffering.aggregate({
+      where,
+      _sum: {
+        offeringAmount: true,
+        titheAmount: true,
+      },
+    });
+
+    return {
+      totalRecords,
+      totalOffering: totals._sum.offeringAmount?.toNumber() || 0,
+      totalTithe: totals._sum.titheAmount?.toNumber() || 0,
+      totalCombined: (totals._sum.offeringAmount?.toNumber() || 0) + (totals._sum.titheAmount?.toNumber() || 0),
     };
   }
 

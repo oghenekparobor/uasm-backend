@@ -26,22 +26,24 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  userRoles         UserRole[]
-  classLeaders      ClassLeader[]
-  attendanceWindows AttendanceWindow[]
-  classAttendance   ClassAttendance[]
-  kitchenLogs       KitchenProductionLog[]
-  distributionBatches DistributionBatch[]
-  classDistributions ClassDistribution[]
-  empowermentRequestsCreated EmpowermentRequest[] @relation("CreatedBy")
-  empowermentRequestsApproved EmpowermentRequest[] @relation("ApprovedBy")
-  memberLogs        MemberLog[]
-  requestsCreated   Request[] @relation("CreatedBy")
-  requestsHandled   Request[] @relation("HandledBy")
-  events            Event[]
-  notifications     Notification[]
-  activityLogs      ActivityLog[]
-  memberTransfers   MemberClassHistory[]
+  userRoles                   UserRole[]
+  classLeaders                ClassLeader[]
+  attendanceWindows           AttendanceWindow[]
+  classAttendance             ClassAttendance[]
+  memberAttendance            MemberAttendance[]     @relation("MemberAttendanceMarkedBy")
+  kitchenLogs                 KitchenProductionLog[]
+  distributionBatches         DistributionBatch[]
+  classDistributions          ClassDistribution[]
+  empowermentRequestsCreated  EmpowermentRequest[]   @relation("CreatedBy")
+  empowermentRequestsApproved EmpowermentRequest[]   @relation("ApprovedBy")
+  memberLogs                  MemberLog[]
+  requestsCreated             Request[]              @relation("CreatedBy")
+  requestsHandled             Request[]              @relation("HandledBy")
+  events                      Event[]
+  notifications               Notification[]
+  activityLogs                ActivityLog[]
+  memberTransfers             MemberClassHistory[]
+  classOfferings              ClassOffering[]
 
   @@index([email])
   @@index([isActive])
@@ -78,19 +80,21 @@ model UserRole {
 // ============================================
 
 model Class {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
   type      ClassType
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   // Relations
-  members           Member[]
-  classLeaders      ClassLeader[]
-  classAttendance   ClassAttendance[]
+  members            Member[]
+  classLeaders       ClassLeader[]
+  classAttendance    ClassAttendance[]
+  memberAttendance   MemberAttendance[]
   classDistributions ClassDistribution[]
-  events            Event[]
-  memberHistoryFrom MemberClassHistory[] @relation("FromClass")
-  memberHistoryTo   MemberClassHistory[] @relation("ToClass")
+  classOfferings     ClassOffering[]
+  events             Event[]
+  memberHistoryFrom  MemberClassHistory[] @relation("FromClass")
+  memberHistoryTo    MemberClassHistory[] @relation("ToClass")
 
   @@index([type])
   @@map("classes")
@@ -102,13 +106,13 @@ enum ClassType {
 }
 
 model ClassLeader {
-  id      Int       @id @default(autoincrement())
-  classId String    @map("class_id")
-  userId  String    @map("user_id")
+  id      Int        @id @default(autoincrement())
+  classId String     @map("class_id")
+  userId  String     @map("user_id")
   role    LeaderRole
 
   class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
-  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([classId, userId, role])
   @@index([classId])
@@ -127,19 +131,20 @@ enum LeaderRole {
 // ============================================
 
 model Member {
-  id             String   @id @default(uuid())
-  firstName      String   @map("first_name")
-  lastName       String   @map("last_name")
+  id             String    @id @default(uuid())
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
   birthday       DateTime?
-  currentClassId String   @map("current_class_id")
-  createdAt      DateTime @default(now()) @map("created_at")
+  currentClassId String    @map("current_class_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   // Relations
-  currentClass         Class                  @relation(fields: [currentClassId], references: [id])
-  classHistory          MemberClassHistory[]
-  empowermentRequests  EmpowermentRequest[]
-  memberLogs            MemberLog[]
-  eventAttendance       EventAttendance[]
+  currentClass        Class                @relation(fields: [currentClassId], references: [id])
+  classHistory        MemberClassHistory[]
+  empowermentRequests EmpowermentRequest[]
+  memberLogs          MemberLog[]
+  eventAttendance     EventAttendance[]
+  attendance          MemberAttendance[]
 
   @@index([currentClassId])
   @@index([birthday])
@@ -177,9 +182,11 @@ model AttendanceWindow {
   createdAt  DateTime @default(now()) @map("created_at")
 
   // Relations
-  creator           User                @relation(fields: [createdBy], references: [id])
-  classAttendance   ClassAttendance[]
+  creator             User                @relation(fields: [createdBy], references: [id])
+  classAttendance     ClassAttendance[]
+  memberAttendance    MemberAttendance[]
   distributionBatches DistributionBatch[]
+  classOfferings      ClassOffering[]
 
   @@map("attendance_windows")
 }
@@ -203,6 +210,29 @@ model ClassAttendance {
   @@map("class_attendance")
 }
 
+model MemberAttendance {
+  id                 String   @id @default(uuid())
+  memberId           String   @map("member_id")
+  classId            String   @map("class_id")
+  attendanceWindowId String   @map("attendance_window_id")
+  status             String // 'present' or 'absent'
+  markedBy           String   @map("marked_by")
+  markedAt           DateTime @default(now()) @map("marked_at")
+  notes              String?
+
+  // Relations
+  member           Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  class            Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attendanceWindow AttendanceWindow @relation(fields: [attendanceWindowId], references: [id], onDelete: Cascade)
+  user             User             @relation("MemberAttendanceMarkedBy", fields: [markedBy], references: [id])
+
+  @@unique([memberId, attendanceWindowId])
+  @@index([memberId])
+  @@index([classId])
+  @@index([attendanceWindowId])
+  @@map("member_attendance")
+}
+
 // ============================================
 // 5. Kitchen
 // ============================================
@@ -220,12 +250,12 @@ model KitchenRecipe {
 }
 
 model KitchenProductionLog {
-  id        String   @id @default(uuid())
-  recipeId  String   @map("recipe_id")
-  quantity  Int
-  weekDate  DateTime @map("week_date") @db.Date
-  loggedBy  String   @map("logged_by")
-  loggedAt  DateTime @default(now()) @map("logged_at")
+  id       String   @id @default(uuid())
+  recipeId String   @map("recipe_id")
+  quantity Int
+  weekDate DateTime @map("week_date") @db.Date
+  loggedBy String   @map("logged_by")
+  loggedAt DateTime @default(now()) @map("logged_at")
 
   // Relations
   recipe KitchenRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
@@ -240,16 +270,16 @@ model KitchenProductionLog {
 // ============================================
 
 model DistributionBatch {
-  id                String   @id @default(uuid())
+  id                 String   @id @default(uuid())
   attendanceWindowId String   @map("attendance_window_id")
-  totalFoodReceived Int      @map("total_food_received")
-  totalWaterReceived Int     @map("total_water_received")
-  confirmedBy       String   @map("confirmed_by")
-  confirmedAt       DateTime @default(now()) @map("confirmed_at")
+  totalFoodReceived  Int      @map("total_food_received")
+  totalWaterReceived Int      @map("total_water_received")
+  confirmedBy        String   @map("confirmed_by")
+  confirmedAt        DateTime @default(now()) @map("confirmed_at")
 
   // Relations
-  attendanceWindow  AttendanceWindow @relation(fields: [attendanceWindowId], references: [id], onDelete: Cascade)
-  user              User             @relation(fields: [confirmedBy], references: [id])
+  attendanceWindow   AttendanceWindow    @relation(fields: [attendanceWindowId], references: [id], onDelete: Cascade)
+  user               User                @relation(fields: [confirmedBy], references: [id])
   classDistributions ClassDistribution[]
 
   @@index([attendanceWindowId])
@@ -257,19 +287,19 @@ model DistributionBatch {
 }
 
 model ClassDistribution {
-  id                 String          @id @default(uuid())
+  id                  String         @id @default(uuid())
   distributionBatchId String         @map("distribution_batch_id")
-  classId            String          @map("class_id")
-  foodAllocated      Int             @map("food_allocated")
-  waterAllocated     Int             @map("water_allocated")
-  allocationType     AllocationType  @map("allocation_type")
-  distributedBy      String          @map("distributed_by")
-  distributedAt      DateTime        @default(now()) @map("distributed_at")
+  classId             String         @map("class_id")
+  foodAllocated       Int            @map("food_allocated")
+  waterAllocated      Int            @map("water_allocated")
+  allocationType      AllocationType @map("allocation_type")
+  distributedBy       String         @map("distributed_by")
+  distributedAt       DateTime       @default(now()) @map("distributed_at")
 
   // Relations
   distributionBatch DistributionBatch @relation(fields: [distributionBatchId], references: [id], onDelete: Cascade)
-  class             Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
-  user              User             @relation(fields: [distributedBy], references: [id])
+  class             Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [distributedBy], references: [id])
 
   @@index([classId])
   @@index([distributionBatchId])
@@ -282,24 +312,50 @@ enum AllocationType {
 }
 
 // ============================================
+// 6.1. Offerings & Tithe
+// ============================================
+
+model ClassOffering {
+  id                 String   @id @default(uuid())
+  classId            String   @map("class_id")
+  attendanceWindowId String   @map("attendance_window_id")
+  offeringAmount     Decimal  @db.Decimal(10, 2) @map("offering_amount")
+  titheAmount        Decimal  @db.Decimal(10, 2) @map("tithe_amount")
+  recordedBy         String   @map("recorded_by")
+  recordedAt         DateTime @default(now()) @map("recorded_at")
+  notes              String?  @db.Text
+
+  // Relations
+  class            Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attendanceWindow AttendanceWindow @relation(fields: [attendanceWindowId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [recordedBy], references: [id])
+
+  @@unique([classId, attendanceWindowId])
+  @@index([classId])
+  @@index([attendanceWindowId])
+  @@index([recordedAt])
+  @@map("class_offerings")
+}
+
+// ============================================
 // 7. Empowerment
 // ============================================
 
 model EmpowermentRequest {
-  id          String                @id @default(uuid())
-  memberId    String                @map("member_id")
+  id          String          @id @default(uuid())
+  memberId    String          @map("member_id")
   type        EmpowermentType
   description String?
-  status      RequestStatus         @default(PENDING)
-  requestedBy String                @map("requested_by")
-  approvedBy  String?               @map("approved_by")
-  createdAt   DateTime              @default(now()) @map("created_at")
-  approvedAt  DateTime?             @map("approved_at")
+  status      RequestStatus   @default(PENDING)
+  requestedBy String          @map("requested_by")
+  approvedBy  String?         @map("approved_by")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  approvedAt  DateTime?       @map("approved_at")
 
   // Relations
-  member      Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  requester   User   @relation("CreatedBy", fields: [requestedBy], references: [id])
-  approver    User?  @relation("ApprovedBy", fields: [approvedBy], references: [id])
+  member    Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  requester User   @relation("CreatedBy", fields: [requestedBy], references: [id])
+  approver  User?  @relation("ApprovedBy", fields: [approvedBy], references: [id])
 
   @@index([memberId])
   @@index([status])
@@ -325,8 +381,8 @@ enum RequestStatus {
 
 model MemberLog {
   id        String   @id @default(uuid())
-  memberId String   @map("member_id")
-  createdBy String  @map("created_by")
+  memberId  String   @map("member_id")
+  createdBy String   @map("created_by")
   note      String   @db.Text
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -369,7 +425,7 @@ model Request {
   requestedBy String        @map("requested_by")
   handledBy   String?       @map("handled_by")
   createdAt   DateTime      @default(now()) @map("created_at")
-  resolvedAt DateTime?      @map("resolved_at")
+  resolvedAt  DateTime?     @map("resolved_at")
 
   // Relations
   requester User  @relation("CreatedBy", fields: [requestedBy], references: [id])
@@ -385,20 +441,20 @@ model Request {
 // ============================================
 
 model Event {
-  id              String    @id @default(uuid())
-  title           String
-  description     String?   @db.Text
-  scope           EventScope
-  classId         String?   @map("class_id")
-  isRecurring     Boolean   @default(false) @map("is_recurring")
-  requiresApproval Boolean  @default(false) @map("requires_approval")
-  status          EventStatus @default(PENDING)
-  createdBy       String    @map("created_by")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  id               String      @id @default(uuid())
+  title            String
+  description      String?     @db.Text
+  scope            EventScope
+  classId          String?     @map("class_id")
+  isRecurring      Boolean     @default(false) @map("is_recurring")
+  requiresApproval Boolean     @default(false) @map("requires_approval")
+  status           EventStatus @default(PENDING)
+  createdBy        String      @map("created_by")
+  createdAt        DateTime    @default(now()) @map("created_at")
 
   // Relations
-  class          Class?          @relation(fields: [classId], references: [id])
-  creator        User            @relation(fields: [createdBy], references: [id])
+  class           Class?            @relation(fields: [classId], references: [id])
+  creator         User              @relation(fields: [createdBy], references: [id])
   eventAttendance EventAttendance[]
 
   @@index([scope])
@@ -417,10 +473,10 @@ enum EventStatus {
 }
 
 model EventAttendance {
-  id        String   @id @default(uuid())
-  eventId   String   @map("event_id")
-  memberId  String   @map("member_id")
-  attended  Boolean  @default(false)
+  id       String  @id @default(uuid())
+  eventId  String  @map("event_id")
+  memberId String  @map("member_id")
+  attended Boolean @default(false)
 
   // Relations
   event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -470,4 +526,3 @@ model ActivityLog {
   @@index([createdAt])
   @@map("activity_logs")
 }
-

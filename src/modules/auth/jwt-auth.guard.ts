@@ -48,16 +48,9 @@ export class JwtAuthGuard implements CanActivate {
     // Attach to request for controllers/services
     (request as any).user = user;
 
-    // Also set the format needed for RLS context
-    (request as any).user_rls = {
-      sub: user.id,
-      role: user.role,
-      worker_id: user.workerId,
-      platoon_ids: user.platoonIds,
-    };
-
     // Ensure Postgres RLS sees these claims for all subsequent Prisma queries
-    await this.prisma.setRequestContext();
+    // Note: This is not reliable with connection pooling. Services should use withRLSContext for critical operations.
+    await this.prisma.setRequestContext(user);
 
     return true;
   }
