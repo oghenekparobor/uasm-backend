@@ -297,5 +297,155 @@ export class DistributionService {
       })),
     };
   }
+
+  /**
+   * Get all classes with their attendance for a distribution batch
+   * This helps determine how much food to allocate to each class
+   */
+  async getClassesWithAttendance(batchId: string) {
+    // Get the batch with its attendance window
+    const batch = await this.prisma.distributionBatch.findUnique({
+      where: { id: batchId },
+      include: {
+        attendanceWindow: {
+          include: {
+            classAttendance: {
+              include: {
+                class: true,
+              },
+            },
+          },
+        },
+        classDistributions: true,
+      },
+    });
+
+    if (!batch) {
+      throw new NotFoundException(`Distribution batch with ID ${batchId} not found`);
+    }
+
+    // Get member attendance separately
+    const memberAttendance = await this.prisma.memberAttendance.findMany({
+      where: {
+        attendanceWindowId: batch.attendanceWindowId,
+      },
+      include: {
+        member: true,
+      },
+    });
+
+    // Get all classes with their current member counts
+    const allClasses = await this.prisma.class.findMany({
+      include: {
+        _count: {
+          select: {
+            members: true,
+          },
+        },
+      },
+      orderBy: [
+        { type: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    // Map classes with their attendance and allocation status
+    const classesWithInfo = await Promise.all(
+      allClasses.map(async (classItem) => {
+        // Find class-level attendance record
+        const classAttendance = batch.attendanceWindow.classAttendance.find(
+          (ca) => ca.classId === classItem.id,
+        );
+
+        // Get all members in this class
+        const classMembers = await this.prisma.member.findMany({
+          where: { currentClassId: classItem.id },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        });
+
+        // Get member-level attendance for this class
+        const memberAttendanceRecords = memberAttendance.filter(
+          (ma) => ma.classId === classItem.id,
+        );
+
+        // Categorize members by attendance status
+        const present = memberAttendanceRecords.filter((ma) => ma.status === 'present').length;
+        const absent = memberAttendanceRecords.filter((ma) => ma.status === 'absent').length;
+        const marked = memberAttendanceRecords.length;
+        const totalMembers = classMembers.length;
+        const unmarked = totalMembers - marked;
+
+        // Find allocation record for this class
+        const allocation = batch.classDistributions.find(
+          (cd) => cd.classId === classItem.id,
+        );
+
+        return {
+          id: classItem.id,
+          name: classItem.name,
+          type: classItem.type,
+          memberCount: totalMembers,
+          attendance: {
+            classCount: classAttendance?.count || 0,
+            present,
+            absent,
+            unmarked,
+            totalMembers,
+            marked,
+            hasTaken: !!classAttendance,
+            takenAt: classAttendance?.takenAt || null,
+            takenBy: classAttendance?.takenBy || null,
+          },
+          allocation: allocation
+            ? {
+                id: allocation.id,
+                foodAllocated: allocation.foodAllocated,
+                waterAllocated: allocation.waterAllocated,
+                allocationType: allocation.allocationType,
+                distributedAt: allocation.distributedAt,
+              }
+            : null,
+          hasAttendance: !!classAttendance,
+          hasAllocation: !!allocation,
+        };
+      }),
+    );
+
+    return {
+      batch: {
+        id: batch.id,
+        attendanceWindowId: batch.attendanceWindowId,
+        sundayDate: batch.attendanceWindow.sundayDate,
+        totalFoodReceived: batch.totalFoodReceived,
+        totalWaterReceived: batch.totalWaterReceived,
+        confirmedAt: batch.confirmedAt,
+      },
+      classes: classesWithInfo,
+      summary: {
+        totalClasses: allClasses.length,
+        classesWithAttendance: classesWithInfo.filter((c) => c.hasAttendance).length,
+        classesWithAllocation: classesWithInfo.filter((c) => c.hasAllocation).length,
+        totalAttendance: batch.attendanceWindow.classAttendance.reduce(
+          (sum, ca) => sum + ca.count,
+          0,
+        ),
+        totalFoodAllocated: batch.classDistributions.reduce(
+          (sum, cd) => sum + cd.foodAllocated,
+          0,
+        ),
+        totalWaterAllocated: batch.classDistributions.reduce(
+          (sum, cd) => sum + cd.waterAllocated,
+          0,
+        ),
+        totalPresent: classesWithInfo.reduce((sum, c) => sum + c.attendance.present, 0),
+        totalAbsent: classesWithInfo.reduce((sum, c) => sum + c.attendance.absent, 0),
+        totalUnmarked: classesWithInfo.reduce((sum, c) => sum + c.attendance.unmarked, 0),
+      },
+    };
+  }
 }
 

@@ -83,5 +83,10 @@ export class DistributionController {
   getOverview(@Query('batchId') batchId?: string) {
     return this.distributionService.getOverview(batchId);
   }
+
+  @Get('batches/:batchId/classes-with-attendance')
+  getClassesWithAttendance(@Param('batchId') batchId: string) {
+    return this.distributionService.getClassesWithAttendance(batchId);
+  }
 }
 
