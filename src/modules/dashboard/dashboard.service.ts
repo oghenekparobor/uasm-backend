@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DashboardPeriod } from './dto/dashboard-stats.dto';
 import { AuthenticatedUser } from '../../common/types/auth-user.type';
@@ -312,6 +312,172 @@ export class DashboardService {
     };
   }
 
+  async getDistributionAnalytics(period?: DashboardPeriod) {
+    const dateFilter = this.getDateFilter(period);
+    const where: any = {};
+    if (dateFilter) {
+      where.confirmedAt = dateFilter;
+    }
+
+    // Get all batches with full details
+    const batches = await this.prisma.distributionBatch.findMany({
+      where,
+      include: {
+        attendanceWindow: {
+          select: {
+            id: true,
+            sundayDate: true,
+          },
+        },
+        classDistributions: {
+          include: {
+            class: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: {
+        confirmedAt: 'desc',
+      },
+    });
+
+    // Calculate summary
+    const totalBatches = batches.length;
+    const totalFoodReceived = batches.reduce((sum, b) => sum + b.totalFoodReceived, 0);
+    const totalWaterReceived = batches.reduce((sum, b) => sum + b.totalWaterReceived, 0);
+
+    const allocations = batches.flatMap((b) => b.classDistributions);
+    const totalFoodAllocated = allocations.reduce((sum, a) => sum + a.foodAllocated, 0);
+    const totalWaterAllocated = allocations.reduce((sum, a) => sum + a.waterAllocated, 0);
+
+    // Breakdown by class
+    const byClassMap = new Map<string, {
+      classId: string;
+      className: string;
+      classType: string;
+      totalFoodAllocated: number;
+      totalWaterAllocated: number;
+      allocationCount: number;
+    }>();
+
+    allocations.forEach((allocation) => {
+      const classId = allocation.classId;
+      if (!byClassMap.has(classId)) {
+        byClassMap.set(classId, {
+          classId,
+          className: allocation.class.name,
+          classType: allocation.class.type,
+          totalFoodAllocated: 0,
+          totalWaterAllocated: 0,
+          allocationCount: 0,
+        });
+      }
+
+      const classData = byClassMap.get(classId)!;
+      classData.totalFoodAllocated += allocation.foodAllocated;
+      classData.totalWaterAllocated += allocation.waterAllocated;
+      classData.allocationCount += 1;
+    });
+
+    const byClass = Array.from(byClassMap.values()).sort(
+      (a, b) => b.totalFoodAllocated - a.totalFoodAllocated
+    );
+
+    // Breakdown by month
+    const byMonthMap = new Map<string, {
+      monthKey: string;
+      month: string;
+      batches: number;
+      totalFoodReceived: number;
+      totalWaterReceived: number;
+      totalFoodAllocated: number;
+      totalWaterAllocated: number;
+    }>();
+
+    batches.forEach((batch) => {
+      const date = new Date(batch.attendanceWindow.sundayDate);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      if (!byMonthMap.has(monthKey)) {
+        byMonthMap.set(monthKey, {
+          monthKey,
+          month: monthLabel,
+          batches: 0,
+          totalFoodReceived: 0,
+          totalWaterReceived: 0,
+          totalFoodAllocated: 0,
+          totalWaterAllocated: 0,
+        });
+      }
+
+      const monthData = byMonthMap.get(monthKey)!;
+      monthData.batches += 1;
+      monthData.totalFoodReceived += batch.totalFoodReceived;
+      monthData.totalWaterReceived += batch.totalWaterReceived;
+
+      const batchAllocations = batch.classDistributions;
+      monthData.totalFoodAllocated += batchAllocations.reduce((sum, a) => sum + a.foodAllocated, 0);
+      monthData.totalWaterAllocated += batchAllocations.reduce((sum, a) => sum + a.waterAllocated, 0);
+    });
+
+    const byMonth = Array.from(byMonthMap.values()).sort((a, b) =>
+      b.monthKey.localeCompare(a.monthKey)
+    );
+
+    // Breakdown by batch (recent batches)
+    const byBatch = batches.slice(0, 20).map((batch) => {
+      const batchAllocations = batch.classDistributions;
+      const batchFoodAllocated = batchAllocations.reduce((sum, a) => sum + a.foodAllocated, 0);
+      const batchWaterAllocated = batchAllocations.reduce((sum, a) => sum + a.waterAllocated, 0);
+
+      return {
+        batchId: batch.id,
+        sundayDate: batch.attendanceWindow.sundayDate,
+        confirmedAt: batch.confirmedAt,
+        confirmedBy: `${batch.user.firstName} ${batch.user.lastName}`,
+        totalFoodReceived: batch.totalFoodReceived,
+        totalWaterReceived: batch.totalWaterReceived,
+        totalFoodAllocated: batchFoodAllocated,
+        totalWaterAllocated: batchWaterAllocated,
+        foodRemaining: batch.totalFoodReceived - batchFoodAllocated,
+        waterRemaining: batch.totalWaterReceived - batchWaterAllocated,
+        allocationCount: batchAllocations.length,
+      };
+    });
+
+    return {
+      summary: {
+        totalBatches,
+        totalFoodReceived,
+        totalWaterReceived,
+        totalFoodAllocated,
+        totalWaterAllocated,
+        foodRemaining: totalFoodReceived - totalFoodAllocated,
+        waterRemaining: totalWaterReceived - totalWaterAllocated,
+        utilizationRate: totalFoodReceived > 0 
+          ? ((totalFoodAllocated / totalFoodReceived) * 100).toFixed(1)
+          : '0',
+      },
+      byClass,
+      byMonth,
+      byBatch,
+      period: period || DashboardPeriod.ALL,
+    };
+  }
+
   private async getKitchenStats(dateFilter?: any) {
     const where: any = {};
     if (dateFilter) {
@@ -362,19 +528,429 @@ export class DashboardService {
     };
   }
 
+  /**
+   * GET /dashboard/attendance/analytics
+   * Get detailed member attendance analytics
+   * Only accessible to admin and super_admin
+   */
+  async getAttendanceAnalytics(period?: DashboardPeriod, user?: AuthenticatedUser) {
+    // Only admin and super_admin can access attendance analytics
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+      throw new ForbiddenException('Only administrators can access attendance analytics');
+    }
+
+    const dateFilter = this.getDateFilter(period);
+    const where: any = {};
+    if (dateFilter) {
+      where.markedAt = dateFilter;
+    }
+
+    // Get all member attendance records with full details
+    const attendanceRecords = await this.prisma.memberAttendance.findMany({
+      where,
+      include: {
+        member: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        class: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+        attendanceWindow: {
+          select: {
+            id: true,
+            sundayDate: true,
+            opensAt: true,
+            closesAt: true,
+          },
+        },
+      },
+      orderBy: {
+        markedAt: 'desc',
+      },
+    });
+
+    // Calculate summary
+    const totalRecords = attendanceRecords.length;
+    const presentCount = attendanceRecords.filter((r) => r.status === 'present').length;
+    const absentCount = attendanceRecords.filter((r) => r.status === 'absent').length;
+    const attendanceRate = totalRecords > 0 ? ((presentCount / totalRecords) * 100).toFixed(1) : '0';
+
+    // Breakdown by class
+    const byClassMap = new Map<string, {
+      classId: string;
+      className: string;
+      classType: string;
+      totalRecords: number;
+      presentCount: number;
+      absentCount: number;
+      attendanceRate: string;
+    }>();
+
+    attendanceRecords.forEach((record) => {
+      const classId = record.classId;
+      if (!byClassMap.has(classId)) {
+        byClassMap.set(classId, {
+          classId,
+          className: record.class.name,
+          classType: record.class.type,
+          totalRecords: 0,
+          presentCount: 0,
+          absentCount: 0,
+          attendanceRate: '0',
+        });
+      }
+
+      const classData = byClassMap.get(classId)!;
+      classData.totalRecords += 1;
+      if (record.status === 'present') {
+        classData.presentCount += 1;
+      } else {
+        classData.absentCount += 1;
+      }
+    });
+
+    // Calculate attendance rate for each class
+    byClassMap.forEach((classData) => {
+      classData.attendanceRate = classData.totalRecords > 0
+        ? ((classData.presentCount / classData.totalRecords) * 100).toFixed(1)
+        : '0';
+    });
+
+    const byClass = Array.from(byClassMap.values()).sort(
+      (a, b) => parseFloat(b.attendanceRate) - parseFloat(a.attendanceRate)
+    );
+
+    // Breakdown by month
+    const byMonthMap = new Map<string, {
+      monthKey: string;
+      month: string;
+      totalRecords: number;
+      presentCount: number;
+      absentCount: number;
+      attendanceRate: string;
+    }>();
+
+    attendanceRecords.forEach((record) => {
+      const date = new Date(record.markedAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      if (!byMonthMap.has(monthKey)) {
+        byMonthMap.set(monthKey, {
+          monthKey,
+          month: monthLabel,
+          totalRecords: 0,
+          presentCount: 0,
+          absentCount: 0,
+          attendanceRate: '0',
+        });
+      }
+
+      const monthData = byMonthMap.get(monthKey)!;
+      monthData.totalRecords += 1;
+      if (record.status === 'present') {
+        monthData.presentCount += 1;
+      } else {
+        monthData.absentCount += 1;
+      }
+    });
+
+    // Calculate attendance rate for each month
+    byMonthMap.forEach((monthData) => {
+      monthData.attendanceRate = monthData.totalRecords > 0
+        ? ((monthData.presentCount / monthData.totalRecords) * 100).toFixed(1)
+        : '0';
+    });
+
+    const byMonth = Array.from(byMonthMap.values()).sort((a, b) =>
+      b.monthKey.localeCompare(a.monthKey)
+    );
+
+    // Breakdown by attendance window (recent windows)
+    const byWindowMap = new Map<string, {
+      windowId: string;
+      sundayDate: Date;
+      totalRecords: number;
+      presentCount: number;
+      absentCount: number;
+      attendanceRate: string;
+    }>();
+
+    attendanceRecords.forEach((record) => {
+      const windowId = record.attendanceWindowId;
+      if (!byWindowMap.has(windowId)) {
+        byWindowMap.set(windowId, {
+          windowId,
+          sundayDate: record.attendanceWindow.sundayDate,
+          totalRecords: 0,
+          presentCount: 0,
+          absentCount: 0,
+          attendanceRate: '0',
+        });
+      }
+
+      const windowData = byWindowMap.get(windowId)!;
+      windowData.totalRecords += 1;
+      if (record.status === 'present') {
+        windowData.presentCount += 1;
+      } else {
+        windowData.absentCount += 1;
+      }
+    });
+
+    // Calculate attendance rate for each window
+    byWindowMap.forEach((windowData) => {
+      windowData.attendanceRate = windowData.totalRecords > 0
+        ? ((windowData.presentCount / windowData.totalRecords) * 100).toFixed(1)
+        : '0';
+    });
+
+    const byWindow = Array.from(byWindowMap.values())
+      .sort((a, b) => b.sundayDate.getTime() - a.sundayDate.getTime())
+      .slice(0, 20);
+
+    // Daily trends (last 30 days)
+    const dailyTrendsMap = new Map<string, {
+      date: string;
+      dateKey: string;
+      totalRecords: number;
+      presentCount: number;
+      absentCount: number;
+      attendanceRate: string;
+    }>();
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    attendanceRecords
+      .filter((r) => new Date(r.markedAt) >= thirtyDaysAgo)
+      .forEach((record) => {
+        const date = new Date(record.markedAt);
+        const dateKey = date.toISOString().split('T')[0];
+        const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        if (!dailyTrendsMap.has(dateKey)) {
+          dailyTrendsMap.set(dateKey, {
+            date: dateLabel,
+            dateKey,
+            totalRecords: 0,
+            presentCount: 0,
+            absentCount: 0,
+            attendanceRate: '0',
+          });
+        }
+
+        const dayData = dailyTrendsMap.get(dateKey)!;
+        dayData.totalRecords += 1;
+        if (record.status === 'present') {
+          dayData.presentCount += 1;
+        } else {
+          dayData.absentCount += 1;
+        }
+      });
+
+    // Calculate attendance rate for each day
+    dailyTrendsMap.forEach((dayData) => {
+      dayData.attendanceRate = dayData.totalRecords > 0
+        ? ((dayData.presentCount / dayData.totalRecords) * 100).toFixed(1)
+        : '0';
+    });
+
+    const dailyTrends = Array.from(dailyTrendsMap.values())
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+      .slice(-30);
+
+    return {
+      summary: {
+        totalRecords,
+        presentCount,
+        absentCount,
+        attendanceRate,
+      },
+      byClass,
+      byMonth,
+      byWindow,
+      dailyTrends,
+      period: period || DashboardPeriod.ALL,
+    };
+  }
+
+  async getOfferingsAnalytics(period?: DashboardPeriod) {
+    const dateFilter = this.getDateFilter(period);
+    const where: any = {};
+    if (dateFilter) {
+      where.recordedAt = dateFilter;
+    }
+
+    // Get overall totals
+    const totals = await this.prisma.classOffering.aggregate({
+      where,
+      _sum: {
+        offeringAmount: true,
+        titheAmount: true,
+      },
+      _count: true,
+    });
+
+    // Get breakdown by class
+    const byClass = await this.prisma.classOffering.groupBy({
+      by: ['classId'],
+      where,
+      _sum: {
+        offeringAmount: true,
+        titheAmount: true,
+      },
+      _count: true,
+    });
+
+    // Get class details
+    const classIds = byClass.map((item) => item.classId);
+    const classes = await this.prisma.class.findMany({
+      where: { id: { in: classIds } },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+      },
+    });
+
+    const classesMap = new Map(classes.map((c) => [c.id, c]));
+
+    const byClassWithDetails = byClass.map((item) => {
+      const classInfo = classesMap.get(item.classId);
+      return {
+        classId: item.classId,
+        className: classInfo?.name || 'Unknown',
+        classType: classInfo?.type || 'UNKNOWN',
+        totalOffering: item._sum.offeringAmount?.toNumber() || 0,
+        totalTithe: item._sum.titheAmount?.toNumber() || 0,
+        totalCombined: (item._sum.offeringAmount?.toNumber() || 0) + (item._sum.titheAmount?.toNumber() || 0),
+        recordCount: item._count,
+      };
+    });
+
+    // Get breakdown by attendance window (month)
+    const byWindow = await this.prisma.classOffering.findMany({
+      where,
+      include: {
+        attendanceWindow: {
+          select: {
+            id: true,
+            sundayDate: true,
+          },
+        },
+        class: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+      orderBy: {
+        recordedAt: 'desc',
+      },
+    });
+
+    // Group by month
+    const byMonthMap = new Map<string, {
+      monthKey: string;
+      month: string;
+      totalOffering: number;
+      totalTithe: number;
+      totalCombined: number;
+      recordCount: number;
+    }>();
+
+    byWindow.forEach((item) => {
+      const date = new Date(item.attendanceWindow.sundayDate);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      if (!byMonthMap.has(monthKey)) {
+        byMonthMap.set(monthKey, {
+          monthKey,
+          month: monthLabel,
+          totalOffering: 0,
+          totalTithe: 0,
+          totalCombined: 0,
+          recordCount: 0,
+        });
+      }
+
+      const monthData = byMonthMap.get(monthKey)!;
+      monthData.totalOffering += item.offeringAmount.toNumber();
+      monthData.totalTithe += item.titheAmount.toNumber();
+      monthData.totalCombined += item.offeringAmount.toNumber() + item.titheAmount.toNumber();
+      monthData.recordCount += 1;
+    });
+
+    const byMonth = Array.from(byMonthMap.values()).sort((a, b) => 
+      b.monthKey.localeCompare(a.monthKey)
+    );
+
+    return {
+      summary: {
+        totalRecords: totals._count,
+        totalOffering: totals._sum.offeringAmount?.toNumber() || 0,
+        totalTithe: totals._sum.titheAmount?.toNumber() || 0,
+        totalCombined: (totals._sum.offeringAmount?.toNumber() || 0) + (totals._sum.titheAmount?.toNumber() || 0),
+      },
+      byClass: byClassWithDetails.sort((a, b) => b.totalCombined - a.totalCombined),
+      byMonth,
+      period: period || DashboardPeriod.ALL,
+    };
+  }
+
   private async getPlatoonStats(user: AuthenticatedUser, dateFilter?: any) {
-    if (!user.platoonIds || user.platoonIds.length === 0) {
+    // For admin/super_admin, show stats for all platoons (type = PLATOON)
+    // For leaders/teachers, show stats for their assigned platoons only
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+    
+    let classIds: string[] = [];
+    
+    if (isAdmin) {
+      // Get all platoon class IDs
+      const platoonClasses = await this.prisma.class.findMany({
+        where: { type: 'PLATOON' },
+        select: { id: true },
+      });
+      classIds = platoonClasses.map((c) => c.id);
+    } else {
+      // Use assigned platoon IDs
+      if (!user.platoonIds || user.platoonIds.length === 0) {
+        return {
+          totalMembers: 0,
+          totalAttendance: 0,
+          totalLogs: 0,
+          totalEmpowerments: 0,
+          platoonIds: [],
+        };
+      }
+      classIds = user.platoonIds;
+    }
+
+    if (classIds.length === 0) {
       return {
         totalMembers: 0,
         totalAttendance: 0,
         totalLogs: 0,
         totalEmpowerments: 0,
+        platoonIds: [],
       };
     }
 
     const where: any = {
       currentClassId: {
-        in: user.platoonIds,
+        in: classIds,
       },
     };
 
@@ -388,12 +964,21 @@ export class DashboardService {
 
     const memberIds = members.map((m) => m.id);
 
+    // If no members found, return zeros for all stats
+    if (memberIds.length === 0) {
+      return {
+        totalMembers: 0,
+        totalAttendance: 0,
+        totalLogs: 0,
+        totalEmpowerments: 0,
+        platoonIds: classIds,
+      };
+    }
+
     // Get attendance for members in these platoons
     const attendanceWhere: any = {
-      class: {
-        id: {
-          in: user.platoonIds,
-        },
+      classId: {
+        in: classIds,
       },
     };
     if (dateFilter) {
@@ -436,7 +1021,7 @@ export class DashboardService {
       totalAttendance,
       totalLogs,
       totalEmpowerments,
-      platoonIds: user.platoonIds,
+      platoonIds: classIds,
     };
   }
 

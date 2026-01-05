@@ -37,5 +37,48 @@ export class DashboardController {
   getOverview(@AuthUser() user: AuthenticatedUser) {
     return this.dashboardService.getOverview(user);
   }
+
+  /**
+   * GET /dashboard/offerings/analytics
+   * Get detailed offerings and tithe analytics
+   * Query params:
+   * - period: today | week | month | year | all (default: all)
+   * - startDate: ISO date string (optional)
+   * - endDate: ISO date string (optional)
+   */
+  @Get('offerings/analytics')
+  getOfferingsAnalytics(@Query() dto: DashboardStatsDto) {
+    return this.dashboardService.getOfferingsAnalytics(dto.period);
+  }
+
+  /**
+   * GET /dashboard/distribution/analytics
+   * Get detailed distribution analytics
+   * Query params:
+   * - period: today | week | month | year | all (default: all)
+   * - startDate: ISO date string (optional)
+   * - endDate: ISO date string (optional)
+   */
+  @Get('distribution/analytics')
+  getDistributionAnalytics(@Query() dto: DashboardStatsDto) {
+    return this.dashboardService.getDistributionAnalytics(dto.period);
+  }
+
+  /**
+   * GET /dashboard/attendance/analytics
+   * Get detailed member attendance analytics
+   * Only accessible to admin and super_admin
+   * Query params:
+   * - period: today | week | month | year | all (default: all)
+   * - startDate: ISO date string (optional)
+   * - endDate: ISO date string (optional)
+   */
+  @Get('attendance/analytics')
+  getAttendanceAnalytics(
+    @AuthUser() user: AuthenticatedUser,
+    @Query() dto: DashboardStatsDto,
+  ) {
+    return this.dashboardService.getAttendanceAnalytics(dto.period, user);
+  }
 }
 

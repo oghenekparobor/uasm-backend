@@ -4,9 +4,10 @@ import { MembersController } from './members.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ActivityLogsModule } from '../activity-logs/activity-logs.module';
 import { AuthModule } from '../auth/auth.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
-  imports: [PrismaModule, ActivityLogsModule, AuthModule],
+  imports: [PrismaModule, ActivityLogsModule, AuthModule, UploadModule],
   controllers: [MembersController],
   providers: [MembersService],
   exports: [MembersService],

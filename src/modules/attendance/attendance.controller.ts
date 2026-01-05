@@ -59,8 +59,8 @@ export class AttendanceController {
 
   @Patch('windows/:id/close')
   @HttpCode(HttpStatus.OK)
-  closeWindow(@Param('id') id: string) {
-    return this.attendanceService.closeWindow(id);
+  closeWindow(@Param('id') id: string, @AuthUser() user: AuthenticatedUser) {
+    return this.attendanceService.closeWindow(id, user);
   }
 
   @Post('classes/:classId')

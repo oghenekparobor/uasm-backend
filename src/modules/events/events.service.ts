@@ -10,6 +10,11 @@ export class EventsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateEventDto, user: AuthenticatedUser) {
+    // Only admin and super_admin can create events
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
+      throw new BadRequestException('Only administrators can create events');
+    }
+
     // Validate class-scoped events
     if (dto.scope === 'CLASS' && !dto.classId) {
       throw new BadRequestException('classId is required for CLASS scope events');
@@ -18,9 +23,6 @@ export class EventsService {
     if (dto.scope === 'GLOBAL' && dto.classId) {
       throw new BadRequestException('classId should not be provided for GLOBAL events');
     }
-
-    // RLS ensures leaders can only create events for their classes
-    const requiresApproval = dto.scope === 'CLASS' && user.role !== 'admin' && user.role !== 'super_admin';
 
     return this.prisma.withRLSContext(async (tx) => {
       // Verify class exists if provided (within transaction with RLS context)
@@ -40,9 +42,10 @@ export class EventsService {
           description: dto.description,
           scope: dto.scope,
           classId: dto.classId,
+          eventDate: new Date(dto.eventDate),
           isRecurring: dto.isRecurring || false,
-          requiresApproval,
-          status: requiresApproval ? EventStatus.PENDING : EventStatus.APPROVED,
+          requiresApproval: false, // Admin-created events don't need approval
+          status: EventStatus.APPROVED, // Admin-created events are auto-approved
           createdBy: user.id,
         },
         include: {
@@ -59,14 +62,41 @@ export class EventsService {
     });
   }
 
-  async findAll(pagination?: PaginationDto): Promise<PaginatedResponse<any>> {
+  async findAll(pagination?: PaginationDto, user?: AuthenticatedUser): Promise<PaginatedResponse<any>> {
     const { skip, take, page, limit } = getPaginationParams(pagination || {});
 
-    // Get total count for pagination metadata
-    const total = await this.prisma.event.count();
+    // Build where clause based on user role
+    const where: any = {
+      status: EventStatus.APPROVED, // Only show approved events
+    };
 
-    // RLS filters: leaders see their class events, admin sees all
+    // Non-admin users see: GLOBAL events + CLASS events for their assigned classes
+    if (user && user.role !== 'admin' && user.role !== 'super_admin') {
+      // Get user's class assignments
+      const classLeaders = await this.prisma.classLeader.findMany({
+        where: {
+          userId: user.id,
+        },
+        select: {
+          classId: true,
+        },
+      });
+
+      const userClassIds = classLeaders.map((cl) => cl.classId);
+
+      // Show GLOBAL events OR events for classes the user is assigned to
+      where.OR = [
+        { scope: 'GLOBAL' },
+        ...(userClassIds.length > 0 ? [{ scope: 'CLASS', classId: { in: userClassIds } }] : []),
+      ];
+    }
+
+    // Get total count for pagination metadata
+    const total = await this.prisma.event.count({ where });
+
+    // RLS filters: users see their relevant events, admin sees all
     const data = await this.prisma.event.findMany({
+      where,
       skip,
       take,
       include: {
@@ -85,7 +115,7 @@ export class EventsService {
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        eventDate: 'asc', // Order by event date
       },
     });
 
@@ -93,6 +123,57 @@ export class EventsService {
       data,
       meta: createPaginationMeta(total, page, limit),
     };
+  }
+
+  async getEventsForReminders(daysAhead: number = 1): Promise<any[]> {
+    // Get events that need reminders (within the next N days)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const futureDate = new Date(today);
+    futureDate.setDate(futureDate.getDate() + daysAhead);
+    futureDate.setHours(23, 59, 59, 999);
+
+    const events = await this.prisma.event.findMany({
+      where: {
+        status: EventStatus.APPROVED,
+        eventDate: {
+          gte: today,
+          lte: futureDate,
+        },
+      },
+      include: {
+        class: {
+          include: {
+            classLeaders: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        creator: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+      orderBy: {
+        eventDate: 'asc',
+      },
+    });
+
+    return events;
   }
 
   async findOne(id: string) {

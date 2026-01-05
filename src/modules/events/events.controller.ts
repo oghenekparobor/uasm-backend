@@ -35,9 +35,15 @@ export class EventsController {
     return this.eventsService.create(dto, user);
   }
 
+  @Get('reminders')
+  getEventsForReminders(@Query('daysAhead') daysAhead?: string) {
+    const days = daysAhead ? parseInt(daysAhead, 10) : 1;
+    return this.eventsService.getEventsForReminders(days);
+  }
+
   @Get()
-  findAll(@Query() pagination: PaginationDto) {
-    return this.eventsService.findAll(pagination);
+  findAll(@Query() pagination: PaginationDto, @AuthUser() user: AuthenticatedUser) {
+    return this.eventsService.findAll(pagination, user);
   }
 
   @Get(':id')

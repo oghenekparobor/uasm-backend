@@ -13,12 +13,15 @@ import {
   buildSortOrder,
   parseSearchFields,
 } from '../../common/dto/filter.dto';
+import { UploadService } from '../upload/upload.service';
+import { Express } from 'express';
 
 @Injectable()
 export class MembersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogs: ActivityLogsService,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(dto: CreateMemberDto, user: AuthenticatedUser) {
@@ -29,6 +32,10 @@ export class MembersService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           birthday: dto.birthday ? new Date(dto.birthday) : null,
+          phone: dto.phone,
+          email: dto.email,
+          address: dto.address,
+          emergencyContact: dto.emergencyContact,
           currentClassId: dto.currentClassId,
         },
       });
@@ -184,14 +191,20 @@ export class MembersService {
   async update(id: string, dto: UpdateMemberDto, user: AuthenticatedUser) {
     // RLS ensures user can only update members in their platoons
     return this.prisma.withRLSContext(user, async (tx) => {
+      const updateData: any = {};
+      
+      if (dto.firstName !== undefined) updateData.firstName = dto.firstName;
+      if (dto.lastName !== undefined) updateData.lastName = dto.lastName;
+      if (dto.birthday !== undefined) updateData.birthday = dto.birthday ? new Date(dto.birthday) : null;
+      if (dto.phone !== undefined) updateData.phone = dto.phone || null;
+      if (dto.email !== undefined) updateData.email = dto.email || null;
+      if (dto.address !== undefined) updateData.address = dto.address || null;
+      if (dto.emergencyContact !== undefined) updateData.emergencyContact = dto.emergencyContact || null;
+      if (dto.currentClassId !== undefined) updateData.currentClassId = dto.currentClassId;
+
       return tx.member.update({
         where: { id },
-        data: {
-          ...(dto.firstName && { firstName: dto.firstName }),
-          ...(dto.lastName && { lastName: dto.lastName }),
-          ...(dto.birthday && { birthday: new Date(dto.birthday) }),
-          ...(dto.currentClassId && { currentClassId: dto.currentClassId }),
-        },
+        data: updateData,
       });
     });
   }
@@ -281,6 +294,191 @@ export class MembersService {
       orderBy: {
         transferredAt: 'desc',
       },
+    });
+  }
+
+  async getUpcomingBirthdays(upcomingDays: number = 7, user?: AuthenticatedUser) {
+    const today = new Date();
+    const todayMonth = today.getMonth();
+    const todayDate = today.getDate();
+    const todayYear = today.getFullYear();
+
+    // Build base where clause
+    const where: any = {
+      birthday: {
+        not: null,
+      },
+    };
+
+    // Apply RLS: If user is not admin/super_admin, filter to only show members from classes they're assigned to
+    if (user && user.role !== 'admin' && user.role !== 'super_admin') {
+      const userClassLeaders = await this.prisma.classLeader.findMany({
+        where: {
+          userId: user.id,
+        },
+        select: {
+          classId: true,
+        },
+      });
+
+      const userClassIds = userClassLeaders.map((cl) => cl.classId);
+
+      if (userClassIds.length > 0) {
+        where.currentClassId = {
+          in: userClassIds,
+        };
+      } else {
+        // User has no assigned classes, return empty array
+        return [];
+      }
+    }
+
+    // Get all members with birthdays (using RLS context)
+    const members = user
+      ? await this.prisma.withRLSContext(user, async (tx) => {
+          return tx.member.findMany({
+            where,
+            include: {
+              currentClass: {
+                select: {
+                  id: true,
+                  name: true,
+                  type: true,
+                },
+              },
+            },
+          });
+        })
+      : await this.prisma.member.findMany({
+          where,
+          include: {
+            currentClass: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        });
+
+    // Filter members whose birthdays fall within the upcoming days
+    const upcomingBirthdays = members
+      .map((member) => {
+        if (!member.birthday) return null;
+
+        const birthday = new Date(member.birthday);
+        const birthdayMonth = birthday.getMonth();
+        const birthdayDate = birthday.getDate();
+
+        // Create this year's birthday date
+        const thisYearBirthday = new Date(todayYear, birthdayMonth, birthdayDate);
+
+        // If this year's birthday has already passed, use next year's birthday
+        const nextBirthday =
+          thisYearBirthday < today
+            ? new Date(todayYear + 1, birthdayMonth, birthdayDate)
+            : thisYearBirthday;
+
+        // Calculate days until birthday
+        const daysUntil = Math.ceil(
+          (nextBirthday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        if (daysUntil >= 0 && daysUntil <= upcomingDays) {
+          return {
+            ...member,
+            daysUntil,
+            nextBirthday: nextBirthday.toISOString(),
+          };
+        }
+
+        return null;
+      })
+      .filter((member): member is NonNullable<typeof member> => member !== null)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
+    return upcomingBirthdays;
+  }
+
+  async uploadPhoto(id: string, file: Express.Multer.File, user: AuthenticatedUser) {
+    // Verify member exists first (before upload to avoid unnecessary uploads)
+    const member = await this.prisma.member.findUnique({
+      where: { id },
+      select: { id: true, photoUrl: true },
+    });
+
+    if (!member) {
+      throw new NotFoundException(`Member with ID ${id} not found`);
+    }
+
+    // Delete old photo if exists
+    if (member.photoUrl) {
+      try {
+        // Extract public ID from Cloudinary URL
+        const urlParts = member.photoUrl.split('/upload/');
+        if (urlParts.length > 1) {
+          const publicIdWithFormat = urlParts[1].split('.')[0];
+          await this.uploadService.deleteFile(publicIdWithFormat);
+        }
+      } catch (error) {
+        console.error('Failed to delete old photo from Cloudinary:', error);
+        // Continue with new upload even if old photo deletion fails
+      }
+    }
+
+    // Upload new photo to Cloudinary
+    const uploadResult = await this.uploadService.uploadFile(
+      file,
+      `uams/members/${id}`,
+    );
+
+    // Update member with new photo URL (with RLS context)
+    return this.prisma.withRLSContext(user, async (tx) => {
+      return tx.member.update({
+        where: { id },
+        data: {
+          photoUrl: uploadResult.secureUrl,
+        },
+      });
+    });
+  }
+
+  async removePhoto(id: string, user: AuthenticatedUser) {
+    // Get member to check if photo exists
+    const member = await this.prisma.member.findUnique({
+      where: { id },
+      select: { id: true, photoUrl: true },
+    });
+
+    if (!member) {
+      throw new NotFoundException(`Member with ID ${id} not found`);
+    }
+
+    if (!member.photoUrl) {
+      return member; // No photo to remove
+    }
+
+    // Delete photo from Cloudinary
+    try {
+      const urlParts = member.photoUrl.split('/upload/');
+      if (urlParts.length > 1) {
+        const publicIdWithFormat = urlParts[1].split('.')[0];
+        await this.uploadService.deleteFile(publicIdWithFormat);
+      }
+    } catch (error) {
+      console.error('Failed to delete photo from Cloudinary:', error);
+      // Continue with DB update even if Cloudinary deletion fails
+    }
+
+    // Update member to remove photo URL (with RLS context)
+    return this.prisma.withRLSContext(user, async (tx) => {
+      return tx.member.update({
+        where: { id },
+        data: {
+          photoUrl: null,
+        },
+      });
     });
   }
 }

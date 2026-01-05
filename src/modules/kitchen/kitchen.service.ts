@@ -16,12 +16,18 @@ export class KitchenService {
 
   async createRecipe(dto: CreateRecipeDto) {
     // RLS ensures only kitchen/admin can create recipes
-    // Use transaction to ensure RLS context is set on the same connection
-    return this.prisma.withRLSContext(async (tx) => {
+    // Get user from request for RLS context
+    const user = (this.request as any).user as AuthenticatedUser | undefined;
+    return this.prisma.withRLSContext(user, async (tx) => {
       return tx.kitchenRecipe.create({
         data: {
           name: dto.name,
           description: dto.description,
+          ingredients: dto.ingredients,
+          instructions: dto.instructions,
+          portionSizes: dto.portionSizes,
+          nutritionalInfo: dto.nutritionalInfo,
+          category: dto.category,
         },
       });
     });

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsDateString, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsDateString, MaxLength, IsEmail } from 'class-validator';
 import { IsUuid } from '@/common/validators/is-uuid.decorator';
 
 export class CreateMemberDto {
@@ -15,6 +15,26 @@ export class CreateMemberDto {
   @IsOptional()
   @IsDateString({}, { message: 'Birthday must be a valid date in ISO format (YYYY-MM-DD)' })
   birthday?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Phone number must be a string' })
+  @MaxLength(20, { message: 'Phone number must not exceed 20 characters' })
+  phone?: string;
+
+  @IsOptional()
+  @IsEmail({}, { message: 'Email must be a valid email address' })
+  @MaxLength(255, { message: 'Email must not exceed 255 characters' })
+  email?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Address must be a string' })
+  @MaxLength(500, { message: 'Address must not exceed 500 characters' })
+  address?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Emergency contact must be a string' })
+  @MaxLength(500, { message: 'Emergency contact must not exceed 500 characters' })
+  emergencyContact?: string;
 
   @IsUuid({ message: 'Class ID must be a valid UUID' })
   @IsNotEmpty({ message: 'Class ID is required' })

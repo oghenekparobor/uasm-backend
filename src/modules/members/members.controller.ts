@@ -9,6 +9,10 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseIntPipe,
+  DefaultValuePipe,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { MembersService } from './members.service';
 import { CreateMemberDto } from './dto/create-member.dto';
@@ -18,6 +22,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser } from '../auth/auth-user.decorator';
 import { AuthenticatedUser } from '../../common/types/auth-user.type';
 import { MemberFilterDto } from './dto/member-filter.dto';
+import { FileUploadInterceptor } from '../upload/file-upload.interceptor';
 
 @Controller('members')
 @UseGuards(JwtAuthGuard)
@@ -33,6 +38,15 @@ export class MembersController {
   @Get()
   findAll(@Query() filters: MemberFilterDto, @AuthUser() user: AuthenticatedUser) {
     return this.membersService.findAll(filters, user);
+  }
+
+  @Get('birthdays/upcoming')
+  getUpcomingBirthdays(
+    @Query('upcomingDays', new DefaultValuePipe(7), new ParseIntPipe({ optional: true }))
+    upcomingDays: number,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.getUpcomingBirthdays(upcomingDays, user);
   }
 
   @Get(':id')
@@ -62,6 +76,38 @@ export class MembersController {
   @Get(':id/history')
   getHistory(@Param('id') id: string) {
     return this.membersService.getHistory(id);
+  }
+
+  @Post(':id/photo')
+  @UseInterceptors(
+    FileUploadInterceptor({
+      fieldName: 'photo',
+      maxSize: 5 * 1024 * 1024, // 5MB
+      allowedMimeTypes: [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+      ],
+      required: true,
+    }),
+  )
+  @HttpCode(HttpStatus.OK)
+  async uploadPhoto(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.uploadPhoto(id, file, user);
+  }
+
+  @Post(':id/photo/remove')
+  @HttpCode(HttpStatus.OK)
+  async removePhoto(
+    @Param('id') id: string,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.removePhoto(id, user);
   }
 }
 

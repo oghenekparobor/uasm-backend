@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsBoolean, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsBoolean, MaxLength, IsDateString } from 'class-validator';
 import { EventScope } from '@prisma/client';
 import { IsUuid } from '@/common/validators/is-uuid.decorator';
 
@@ -20,6 +20,10 @@ export class CreateEventDto {
   @IsOptional()
   @IsUuid({ message: 'Class ID must be a valid UUID' })
   classId?: string;
+
+  @IsDateString({}, { message: 'Event date must be a valid date in ISO format' })
+  @IsNotEmpty({ message: 'Event date is required' })
+  eventDate: string;
 
   @IsOptional()
   @IsBoolean({ message: 'isRecurring must be a boolean value' })

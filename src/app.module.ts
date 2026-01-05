@@ -22,6 +22,7 @@ import { UploadModule } from './modules/upload/upload.module';
 import { HealthModule } from './modules/health/health.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OfferingsModule } from './modules/offerings/offerings.module';
+import { ExportModule } from './modules/export/export.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
 @Module({
@@ -77,6 +78,7 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
         ActivityLogsModule,
         DashboardModule,
         OfferingsModule,
+        ExportModule,
   ],
   controllers: [],
   providers: [

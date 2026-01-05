@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OpenAttendanceWindowDto } from './dto/open-attendance-window.dto';
 import { TakeAttendanceDto } from './dto/take-attendance.dto';
@@ -19,6 +19,11 @@ export class AttendanceService {
   ) {}
 
   async openWindow(dto: OpenAttendanceWindowDto, user: AuthenticatedUser) {
+    // Only admin and super_admin can create attendance windows
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
+      throw new ForbiddenException('Only administrators can create attendance windows');
+    }
+
     // Validate that closesAt is after opensAt
     const opensAt = new Date(dto.opensAt);
     const closesAt = new Date(dto.closesAt);
@@ -27,8 +32,7 @@ export class AttendanceService {
       throw new BadRequestException('closesAt must be after opensAt');
     }
 
-    // RLS ensures only admin/super_admin can create windows
-    return this.prisma.withRLSContext(async (tx) => {
+    return this.prisma.withRLSContext(user, async (tx) => {
       return tx.attendanceWindow.create({
         data: {
           sundayDate: new Date(dto.sundayDate),
@@ -244,7 +248,12 @@ export class AttendanceService {
     };
   }
 
-  async closeWindow(id: string) {
+  async closeWindow(id: string, user: AuthenticatedUser) {
+    // Only admin and super_admin can close attendance windows
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
+      throw new ForbiddenException('Only administrators can close attendance windows');
+    }
+
     const window = await this.prisma.attendanceWindow.findUnique({
       where: { id },
     });
@@ -254,8 +263,7 @@ export class AttendanceService {
     }
 
     const now = new Date();
-    // RLS ensures only admin/super_admin can update windows
-    return this.prisma.withRLSContext(async (tx) => {
+    return this.prisma.withRLSContext(user, async (tx) => {
       return tx.attendanceWindow.update({
         where: { id },
         data: {

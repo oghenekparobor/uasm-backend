@@ -131,12 +131,18 @@ enum LeaderRole {
 // ============================================
 
 model Member {
-  id             String    @id @default(uuid())
-  firstName      String    @map("first_name")
-  lastName       String    @map("last_name")
-  birthday       DateTime?
-  currentClassId String    @map("current_class_id")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id               String    @id @default(uuid())
+  firstName        String    @map("first_name")
+  lastName         String    @map("last_name")
+  birthday         DateTime?
+  phone            String?
+  email            String?
+  address          String?   @db.Text
+  emergencyContact String?   @map("emergency_contact") @db.Text
+  photoUrl         String?   @map("photo_url")
+  currentClassId   String    @map("current_class_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   // Relations
   currentClass        Class                @relation(fields: [currentClassId], references: [id])
@@ -148,6 +154,8 @@ model Member {
 
   @@index([currentClassId])
   @@index([birthday])
+  @@index([phone])
+  @@index([email])
   @@map("members")
 }
 
@@ -238,14 +246,21 @@ model MemberAttendance {
 // ============================================
 
 model KitchenRecipe {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  ingredients     String?  @db.Text
+  instructions    String?  @db.Text
+  portionSizes    String?  @map("portion_sizes") @db.Text
+  nutritionalInfo String?  @map("nutritional_info") @db.Text
+  category        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Relations
   productionLogs KitchenProductionLog[]
 
+  @@index([category])
   @@map("kitchen_recipes")
 }
 
@@ -446,6 +461,7 @@ model Event {
   description      String?     @db.Text
   scope            EventScope
   classId          String?     @map("class_id")
+  eventDate        DateTime    @map("event_date")
   isRecurring      Boolean     @default(false) @map("is_recurring")
   requiresApproval Boolean     @default(false) @map("requires_approval")
   status           EventStatus @default(PENDING)
@@ -459,6 +475,7 @@ model Event {
 
   @@index([scope])
   @@index([classId])
+  @@index([eventDate])
   @@map("events")
 }
 
