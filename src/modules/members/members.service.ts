@@ -16,7 +16,7 @@ import {
 import { UploadService } from '../upload/upload.service';
 import { Express } from 'express';
 import { parse } from 'csv-parse/sync';
-import { ClassType } from '@prisma/client';
+import { ClassType, Prisma } from '@prisma/client';
 
 const WORKERS_CLASS_ID = '00000000-0000-0000-0000-00000000WORK';
 
@@ -66,7 +66,7 @@ export class MembersService {
           age: dto.age ?? null,
           gender: dto.gender ?? null,
           currentClassId: dto.currentClassId,
-        },
+        } as Prisma.MemberUncheckedCreateInput,
       });
     });
   }
@@ -631,7 +631,7 @@ export class MembersService {
                 age: validAge,
                 gender,
                 currentClassId: classId,
-              },
+              } as Prisma.MemberUncheckedCreateInput,
             });
             created++;
           } catch (err) {
