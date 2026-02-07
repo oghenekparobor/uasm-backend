@@ -38,9 +38,13 @@ RUN npx prisma generate
 # Built app and compiled seed from builder
 COPY --from=builder /app/dist ./dist
 
+# Start script (avoids Railway parsing issues with inline shell)
+COPY start.sh ./start.sh
+RUN chmod +x start.sh
+
 # Expose port (Railway sets PORT; default 3000)
 ENV NODE_ENV=production
 EXPOSE 3000
 
-# Start server first so Railway health check can pass; run migrate + seed in background
-CMD ["sh", "-c", "(npx prisma migrate deploy && node dist/prisma/seed.js) & exec node dist/src/main"]
+# Run migrate+seed in background, server in foreground
+CMD ["./start.sh"]
