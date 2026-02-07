@@ -66,6 +66,15 @@ export class MembersController {
     return this.membersService.getUpcomingBirthdays(upcomingDays, user);
   }
 
+  @Get('birthdays/past')
+  getPastBirthdays(
+    @Query('pastDays', new DefaultValuePipe(7), new ParseIntPipe({ optional: true }))
+    pastDays: number,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.getPastBirthdays(pastDays, user);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.membersService.findOne(id);

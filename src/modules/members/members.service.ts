@@ -434,6 +434,75 @@ export class MembersService {
     return upcomingBirthdays;
   }
 
+  async getPastBirthdays(pastDays: number = 7, user?: AuthenticatedUser) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayYear = today.getFullYear();
+
+    const where: any = {
+      birthday: {
+        not: null,
+      },
+    };
+
+    if (user && user.role !== 'admin' && user.role !== 'super_admin') {
+      const userClassLeaders = await this.prisma.classLeader.findMany({
+        where: { userId: user.id },
+        select: { classId: true },
+      });
+      const userClassIds = userClassLeaders.map((cl) => cl.classId);
+      if (userClassIds.length > 0) {
+        where.currentClassId = { in: userClassIds };
+      } else {
+        return [];
+      }
+    }
+
+    const members = user
+      ? await this.prisma.withRLSContext(user, async (tx) =>
+          tx.member.findMany({
+            where,
+            include: {
+              currentClass: {
+                select: { id: true, name: true, type: true },
+              },
+            },
+          })
+        )
+      : await this.prisma.member.findMany({
+          where,
+          include: {
+            currentClass: {
+              select: { id: true, name: true, type: true },
+            },
+          },
+        });
+
+    const pastBirthdays = members
+      .map((member) => {
+        if (!member.birthday) return null;
+        const birthday = new Date(member.birthday);
+        const birthdayMonth = birthday.getMonth();
+        const birthdayDate = birthday.getDate();
+        const thisYearBirthday = new Date(todayYear, birthdayMonth, birthdayDate);
+        const daysAgo = Math.ceil(
+          (today.getTime() - thisYearBirthday.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (daysAgo >= 1 && daysAgo <= pastDays) {
+          return {
+            ...member,
+            daysAgo,
+            birthdayDate: thisYearBirthday.toISOString(),
+          };
+        }
+        return null;
+      })
+      .filter((member): member is NonNullable<typeof member> => member !== null)
+      .sort((a, b) => b.daysAgo - a.daysAgo);
+
+    return pastBirthdays;
+  }
+
   async uploadPhoto(id: string, file: Express.Multer.File, user: AuthenticatedUser) {
     // Verify member exists first (before upload to avoid unnecessary uploads)
     const member = await this.prisma.member.findUnique({
