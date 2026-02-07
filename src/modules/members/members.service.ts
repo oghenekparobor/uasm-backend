@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
@@ -41,6 +41,8 @@ function parseCsvDate(value: string): Date | null {
 
 @Injectable()
 export class MembersService {
+  private readonly logger = new Logger(MembersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogs: ActivityLogsService,
@@ -547,90 +549,105 @@ export class MembersService {
 
     const errors: { row: number; message: string }[] = [];
 
-    return this.prisma.withRLSContext(user, async (tx) => {
-      const classCache = new Map<string, string>();
-      const allClasses = await tx.class.findMany({
-        where: {
-          type: ClassType.PLATOON,
-          id: { not: WORKERS_CLASS_ID },
-        },
-        select: { id: true, name: true },
-      });
-      allClasses.forEach((c) => classCache.set(c.name.trim(), c.id));
-
-      async function getOrCreateClassId(platoonName: string): Promise<string | null> {
-        const name = (platoonName || '').trim();
-        if (!name) return null;
-        let id = classCache.get(name);
-        if (id) return id;
-        const created = await tx.class.create({
-          data: { name, type: ClassType.PLATOON },
-          select: { id: true },
+    try {
+      return await this.prisma.withRLSContext(user, async (tx) => {
+        const classCache = new Map<string, string>();
+        const allClasses = await tx.class.findMany({
+          where: {
+            type: ClassType.PLATOON,
+            id: { not: WORKERS_CLASS_ID },
+          },
+          select: { id: true, name: true },
         });
-        classCache.set(name, created.id);
-        return created.id;
-      }
+        allClasses.forEach((c) => classCache.set(c.name.trim(), c.id));
 
-      let created = 0;
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const rowNum = i + 2;
-        const firstName = getRowValue(row, 'First Name', 'First name');
-        const lastName = getRowValue(row, 'Last Name', 'Lastname', 'Last name');
-        const platoon = getRowValue(row, 'Platoon');
-        if (!firstName || !lastName || !platoon) {
-          errors.push({
-            row: rowNum,
-            message: 'Skipped: missing required First name, Last name, or Platoon.',
+        async function getOrCreateClassId(platoonName: string): Promise<string | null> {
+          const name = (platoonName || '').trim();
+          if (!name) return null;
+          let id = classCache.get(name);
+          if (id) return id;
+          const created = await tx.class.create({
+            data: { name, type: ClassType.PLATOON },
+            select: { id: true },
           });
-          continue;
+          classCache.set(name, created.id);
+          return created.id;
         }
-        const classId = await getOrCreateClassId(platoon);
-        if (!classId) {
-          errors.push({ row: rowNum, message: 'Skipped: Platoon name is empty.' });
-          continue;
-        }
-        const dob = getRowValue(row, 'Date of Birth');
-        const birthday = dob ? parseCsvDate(dob) : null;
-        const address = getRowValue(row, 'Address');
-        const nearestBusStop = getRowValue(row, 'Nearest Bus-stop', 'Nearest Bus-stop');
-        const addressWithBusStop =
-          address && nearestBusStop
-            ? `${address}, Nearest bus stop: ${nearestBusStop}`
-            : address || null;
-        const phone = getRowValue(row, 'Phone Number', 'Phone number') || null;
-        const gender = getRowValue(row, 'Gender') || null;
-        const nextOfKin = getRowValue(row, 'Next of Kin (Name and Contact)', 'Next of Kin (Name and Contact)') || null;
-        const occupation = getRowValue(row, 'Occupation') || null;
-        const status = getRowValue(row, 'Marital Status') || null;
-        const ageStr = getRowValue(row, 'Age');
-        const age = ageStr ? parseInt(ageStr, 10) : null;
-        const validAge = age != null && !isNaN(age) && age >= 0 && age <= 150 ? age : null;
 
-        try {
-          await tx.member.create({
-            data: {
-              firstName,
-              lastName,
-              birthday: birthday ?? null,
-              phone,
-              email: null,
-              address: addressWithBusStop,
-              emergencyContact: nextOfKin,
-              occupation,
-              status,
-              age: validAge,
-              gender,
-              currentClassId: classId,
-            },
-          });
-          created++;
-        } catch (err) {
-          errors.push({ row: rowNum, message: err?.message || 'Failed to create member.' });
+        let created = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const rowNum = i + 2;
+          const firstName = getRowValue(row, 'First Name', 'First name');
+          const lastName = getRowValue(row, 'Last Name', 'Lastname', 'Last name');
+          const platoon = getRowValue(row, 'Platoon');
+          if (!firstName || !lastName || !platoon) {
+            errors.push({
+              row: rowNum,
+              message: 'Skipped: missing required First name, Last name, or Platoon.',
+            });
+            continue;
+          }
+          let classId: string | null = null;
+          try {
+            classId = await getOrCreateClassId(platoon);
+          } catch (err: any) {
+            errors.push({ row: rowNum, message: `Platoon "${platoon}": ${err?.message ?? 'Failed to get or create class.'}` });
+            continue;
+          }
+          if (!classId) {
+            errors.push({ row: rowNum, message: 'Skipped: Platoon name is empty.' });
+            continue;
+          }
+          const dob = getRowValue(row, 'Date of Birth');
+          const birthday = dob ? parseCsvDate(dob) : null;
+          const address = getRowValue(row, 'Address');
+          const nearestBusStop = getRowValue(row, 'Nearest Bus-stop', 'Nearest Bus-stop');
+          const addressWithBusStop =
+            address && nearestBusStop
+              ? `${address}, Nearest bus stop: ${nearestBusStop}`
+              : address || null;
+          const phone = getRowValue(row, 'Phone Number', 'Phone number') || null;
+          const gender = getRowValue(row, 'Gender') || null;
+          const nextOfKin = getRowValue(row, 'Next of Kin (Name and Contact)', 'Next of Kin (Name and Contact)') || null;
+          const occupation = getRowValue(row, 'Occupation') || null;
+          const status = getRowValue(row, 'Marital Status') || null;
+          const ageStr = getRowValue(row, 'Age');
+          const age = ageStr ? parseInt(ageStr, 10) : null;
+          const validAge = age != null && !isNaN(age) && age >= 0 && age <= 150 ? age : null;
+
+          try {
+            await tx.member.create({
+              data: {
+                firstName,
+                lastName,
+                birthday: birthday ?? null,
+                phone,
+                email: null,
+                address: addressWithBusStop,
+                emergencyContact: nextOfKin,
+                occupation,
+                status,
+                age: validAge,
+                gender,
+                currentClassId: classId,
+              },
+            });
+            created++;
+          } catch (err) {
+            errors.push({ row: rowNum, message: err?.message || 'Failed to create member.' });
+          }
         }
-      }
       return { created, errors };
     });
+    } catch (err: any) {
+      this.logger.error(`CSV import failed: ${err?.message || err}`, err?.stack);
+      throw new InternalServerErrorException(
+        err?.message?.includes('row-level security') || err?.message?.includes('RLS')
+          ? 'Permission denied. Ensure your account can create classes and members.'
+          : `CSV import failed: ${err?.message || 'See server logs.'}`,
+      );
+    }
   }
 }
 
