@@ -42,5 +42,5 @@ COPY --from=builder /app/dist ./dist
 ENV NODE_ENV=production
 EXPOSE 3000
 
-# Migrate, run compiled seed, then start
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/prisma/seed.js && node dist/src/main"]
+# Start server first so Railway health check can pass; run migrate + seed in background
+CMD ["sh", "-c", "(npx prisma migrate deploy && node dist/prisma/seed.js) & exec node dist/src/main"]

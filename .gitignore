@@ -40,6 +40,6 @@ lerna-debug.log*
 .env.*.local
 .env.*
 
-# Prisma
-/prisma/migrations
+# Prisma (keep migrations committed for deploy)
+# /prisma/migrations - do NOT ignore; migrations must be in repo for Railway
 

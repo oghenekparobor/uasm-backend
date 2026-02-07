@@ -7,10 +7,20 @@ import { ThrottlerExceptionFilter } from './common/exceptions/throttler-exceptio
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS
+  // Enable CORS: allow frontend origin(s); allow Railway health checks
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+  const origins = frontendUrl.split(',').map((u) => u.trim()).filter(Boolean);
+  if (origins.length === 0) origins.push('http://localhost:3001');
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    origin: (reqOrigin, cb) => {
+      // Allow requests with no origin (e.g. Postman, Railway healthcheck)
+      if (!reqOrigin) return cb(null, true);
+      if (origins.some((o) => reqOrigin === o || reqOrigin.startsWith(o.replace(/\/$/, '')))) return cb(null, true);
+      cb(null, false);
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   // Trust proxy for accurate IP addresses (important for rate limiting)
