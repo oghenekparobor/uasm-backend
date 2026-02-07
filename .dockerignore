@@ -1,0 +1,32 @@
+# Dependencies and build output (rebuilt in image)
+node_modules
+dist
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment (inject at runtime)
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git
+.gitignore
+.idea
+.vscode
+*.md
+
+# Tests and coverage
+coverage
+.nyc_output
+*.spec.ts
+test
+jest.config.js
+.eslintrc.js
+.prettierrc
+
+# Misc
+.DS_Store
+*.log
+railway.json
