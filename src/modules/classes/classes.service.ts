@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { AssignLeaderDto } from './dto/assign-leader.dto';
 import { AuthenticatedUser } from '../../common/types/auth-user.type';
-import { PaginationDto, getPaginationParams, createPaginationMeta, PaginatedResponse } from '../../common/dto/pagination.dto';
+import { getPaginationParams, createPaginationMeta, PaginatedResponse } from '../../common/dto/pagination.dto';
+import { ClassFilterDto } from './dto/class-filter.dto';
+
+// Synthetic Workers class ID used by distribution (excluded from classes list)
+const WORKERS_CLASS_ID = '00000000-0000-0000-0000-00000000WORK';
 
 @Injectable()
 export class ClassesService {
@@ -36,12 +40,14 @@ export class ClassesService {
     });
   }
 
-  async findAll(pagination?: PaginationDto, user?: AuthenticatedUser): Promise<PaginatedResponse<any>> {
-    const { skip, take, page, limit } = getPaginationParams(pagination || {});
+  async findAll(query?: ClassFilterDto, user?: AuthenticatedUser): Promise<PaginatedResponse<any>> {
+    const { skip, take, page, limit } = getPaginationParams(query || {});
 
     // Build where clause based on user role
-    const where: any = {};
-    
+    const where: any = {
+      id: { not: WORKERS_CLASS_ID }, // Exclude synthetic Workers class
+    };
+
     // If user is not admin/super_admin, filter to only show classes they're assigned to
     if (user && user.role !== 'admin' && user.role !== 'super_admin') {
       where.classLeaders = {
@@ -50,6 +56,20 @@ export class ClassesService {
         },
       };
     }
+
+    // Search by class name (case-insensitive)
+    if (query?.search?.trim()) {
+      where.name = {
+        contains: query.search.trim(),
+        mode: 'insensitive',
+      };
+    }
+
+    // Sort: allow name, type; default name asc
+    const allowedSortFields = ['name', 'type'];
+    const sortBy = query?.sortBy && allowedSortFields.includes(query.sortBy) ? query.sortBy : 'name';
+    const sortOrder = query?.sortOrder === 'desc' ? 'desc' : 'asc';
+    const orderBy = { [sortBy]: sortOrder };
 
     // Get total count for pagination metadata
     const total = await this.prisma.class.count({ where });
@@ -78,9 +98,7 @@ export class ClassesService {
           },
         },
       },
-      orderBy: {
-        name: 'asc',
-      },
+      orderBy,
     });
 
     return {
@@ -246,6 +264,42 @@ export class ClassesService {
 
       return { message: 'Leader removed successfully' };
     });
+  }
+
+  async delete(classId: string, user: AuthenticatedUser) {
+    if (user.role !== 'super_admin') {
+      throw new ForbiddenException('Only super admins can remove classes.');
+    }
+
+    const classEntity = await this.prisma.class.findUnique({
+      where: { id: classId },
+      select: { id: true, name: true, _count: { select: { members: true } } },
+    });
+    if (!classEntity) {
+      throw new NotFoundException(`Class with ID ${classId} not found`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Unlink events that reference this class
+      await tx.event.updateMany({
+        where: { classId },
+        data: { classId: null },
+      });
+      // Remove member-class history involving this class
+      await tx.memberClassHistory.deleteMany({
+        where: { OR: [{ toClassId: classId }, { fromClassId: classId }] },
+      });
+      // Delete all members in this class (cascades their logs, requests, attendance, etc.)
+      await tx.member.deleteMany({
+        where: { currentClassId: classId },
+      });
+      // Delete the class (cascades classLeaders, classAttendance, memberAttendance, classDistributions, classOfferings)
+      await tx.class.delete({
+        where: { id: classId },
+      });
+    });
+
+    return { message: 'Class and all its members removed successfully' };
   }
 }
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
@@ -15,6 +15,29 @@ import {
 } from '../../common/dto/filter.dto';
 import { UploadService } from '../upload/upload.service';
 import { Express } from 'express';
+import { parse } from 'csv-parse/sync';
+import { ClassType } from '@prisma/client';
+
+const WORKERS_CLASS_ID = '00000000-0000-0000-0000-00000000WORK';
+
+function normalizeHeader(h: string): string {
+  return (h || '').trim();
+}
+
+function getRowValue(row: Record<string, string>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = row[k];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+
+function parseCsvDate(value: string): Date | null {
+  const s = (value || '').trim();
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
 
 @Injectable()
 export class MembersService {
@@ -32,10 +55,14 @@ export class MembersService {
           firstName: dto.firstName,
           lastName: dto.lastName,
           birthday: dto.birthday ? new Date(dto.birthday) : null,
-          phone: dto.phone,
-          email: dto.email,
+          phone: dto.phone ?? null,
+          email: dto.email ?? null,
           address: dto.address,
           emergencyContact: dto.emergencyContact,
+          occupation: dto.occupation ?? null,
+          status: dto.status ?? null,
+          age: dto.age ?? null,
+          gender: dto.gender ?? null,
           currentClassId: dto.currentClassId,
         },
       });
@@ -200,6 +227,10 @@ export class MembersService {
       if (dto.email !== undefined) updateData.email = dto.email || null;
       if (dto.address !== undefined) updateData.address = dto.address || null;
       if (dto.emergencyContact !== undefined) updateData.emergencyContact = dto.emergencyContact || null;
+      if (dto.occupation !== undefined) updateData.occupation = dto.occupation || null;
+      if (dto.status !== undefined) updateData.status = dto.status || null;
+      if (dto.age !== undefined) updateData.age = dto.age ?? null;
+      if (dto.gender !== undefined) updateData.gender = dto.gender || null;
       if (dto.currentClassId !== undefined) updateData.currentClassId = dto.currentClassId;
 
       return tx.member.update({
@@ -479,6 +510,126 @@ export class MembersService {
           photoUrl: null,
         },
       });
+    });
+  }
+
+  /**
+   * Import members from CSV. Only admin and super_admin can use this.
+   * Required per row: First name, Last name, Platoon (others are optional; missing values are set to null).
+   * Uses in-memory class cache (load all platoon classes once) and creates classes by name if missing.
+   * Maps: next of kin -> emergency_contact; nearest bus stop appended to address.
+   */
+  async importFromCsv(
+    buffer: Buffer,
+    user: AuthenticatedUser,
+  ): Promise<{ created: number; errors: { row: number; message: string }[] }> {
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
+      throw new ForbiddenException('Only administrators can import members from CSV.');
+    }
+
+    let rows: Record<string, string>[];
+    try {
+      const raw = buffer.toString('utf-8').replace(/^\uFEFF/, '');
+      const parsed = parse(raw, {
+        columns: (headers) => headers.map(normalizeHeader),
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+      });
+      rows = parsed as Record<string, string>[];
+    } catch (e) {
+      throw new BadRequestException('Invalid CSV format.');
+    }
+
+    if (rows.length === 0) {
+      return { created: 0, errors: [] };
+    }
+
+    const errors: { row: number; message: string }[] = [];
+
+    return this.prisma.withRLSContext(user, async (tx) => {
+      const classCache = new Map<string, string>();
+      const allClasses = await tx.class.findMany({
+        where: {
+          type: ClassType.PLATOON,
+          id: { not: WORKERS_CLASS_ID },
+        },
+        select: { id: true, name: true },
+      });
+      allClasses.forEach((c) => classCache.set(c.name.trim(), c.id));
+
+      async function getOrCreateClassId(platoonName: string): Promise<string | null> {
+        const name = (platoonName || '').trim();
+        if (!name) return null;
+        let id = classCache.get(name);
+        if (id) return id;
+        const created = await tx.class.create({
+          data: { name, type: ClassType.PLATOON },
+          select: { id: true },
+        });
+        classCache.set(name, created.id);
+        return created.id;
+      }
+
+      let created = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2;
+        const firstName = getRowValue(row, 'First Name', 'First name');
+        const lastName = getRowValue(row, 'Last Name', 'Lastname', 'Last name');
+        const platoon = getRowValue(row, 'Platoon');
+        if (!firstName || !lastName || !platoon) {
+          errors.push({
+            row: rowNum,
+            message: 'Skipped: missing required First name, Last name, or Platoon.',
+          });
+          continue;
+        }
+        const classId = await getOrCreateClassId(platoon);
+        if (!classId) {
+          errors.push({ row: rowNum, message: 'Skipped: Platoon name is empty.' });
+          continue;
+        }
+        const dob = getRowValue(row, 'Date of Birth');
+        const birthday = dob ? parseCsvDate(dob) : null;
+        const address = getRowValue(row, 'Address');
+        const nearestBusStop = getRowValue(row, 'Nearest Bus-stop', 'Nearest Bus-stop');
+        const addressWithBusStop =
+          address && nearestBusStop
+            ? `${address}, Nearest bus stop: ${nearestBusStop}`
+            : address || null;
+        const phone = getRowValue(row, 'Phone Number', 'Phone number') || null;
+        const gender = getRowValue(row, 'Gender') || null;
+        const nextOfKin = getRowValue(row, 'Next of Kin (Name and Contact)', 'Next of Kin (Name and Contact)') || null;
+        const occupation = getRowValue(row, 'Occupation') || null;
+        const status = getRowValue(row, 'Marital Status') || null;
+        const ageStr = getRowValue(row, 'Age');
+        const age = ageStr ? parseInt(ageStr, 10) : null;
+        const validAge = age != null && !isNaN(age) && age >= 0 && age <= 150 ? age : null;
+
+        try {
+          await tx.member.create({
+            data: {
+              firstName,
+              lastName,
+              birthday: birthday ?? null,
+              phone,
+              email: null,
+              address: addressWithBusStop,
+              emergencyContact: nextOfKin,
+              occupation,
+              status,
+              age: validAge,
+              gender,
+              currentClassId: classId,
+            },
+          });
+          created++;
+        } catch (err) {
+          errors.push({ row: rowNum, message: err?.message || 'Failed to create member.' });
+        }
+      }
+      return { created, errors };
     });
   }
 }

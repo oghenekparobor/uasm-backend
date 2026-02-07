@@ -18,7 +18,7 @@ import { AssignLeaderDto } from './dto/assign-leader.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser } from '../auth/auth-user.decorator';
 import { AuthenticatedUser } from '../../common/types/auth-user.type';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ClassFilterDto } from './dto/class-filter.dto';
 
 @Controller('classes')
 @UseGuards(JwtAuthGuard)
@@ -32,8 +32,8 @@ export class ClassesController {
   }
 
   @Get()
-  findAll(@Query() pagination: PaginationDto, @AuthUser() user: AuthenticatedUser) {
-    return this.classesService.findAll(pagination, user);
+  findAll(@Query() query: ClassFilterDto, @AuthUser() user: AuthenticatedUser) {
+    return this.classesService.findAll(query, user);
   }
 
   @Get(':id')
@@ -44,6 +44,15 @@ export class ClassesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateClassDto) {
     return this.classesService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  delete(
+    @Param('id') id: string,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.classesService.delete(id, user);
   }
 
   @Post(':id/leaders')

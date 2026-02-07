@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, Inject, Scope } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, BadRequestException, Inject, Scope } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -312,7 +312,9 @@ export class UsersService {
   }
 
   async removeRole(userId: string, roleId: number, user: AuthenticatedUser) {
-    // RLS ensures only admin/super_admin can remove roles
+    if (user.role !== 'super_admin') {
+      throw new ForbiddenException('Only super admins can remove roles from users.');
+    }
     // Use transaction to ensure RLS context is set on the same connection
     return this.prisma.withRLSContext(async (tx) => {
       // Verify user role exists (within transaction with RLS context)
@@ -364,6 +366,48 @@ export class UsersService {
         role: true,
       },
     });
+  }
+
+  async getAllRoles() {
+    return this.prisma.role.findMany({
+      orderBy: { id: 'asc' },
+      select: { id: true, name: true },
+    });
+  }
+
+  async delete(userId: string, currentUser: AuthenticatedUser) {
+    if (currentUser.role !== 'super_admin') {
+      throw new ForbiddenException('Only super admins can delete users.');
+    }
+    if (currentUser.id === userId) {
+      throw new BadRequestException('You cannot delete your own account.');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!target) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.activityLog.deleteMany({
+          where: { actorId: userId },
+        });
+        await tx.user.delete({
+          where: { id: userId },
+        });
+      });
+      return { message: 'User deleted successfully' };
+    } catch (error: any) {
+      if (error?.code === 'P2003' || error?.message?.includes('foreign key')) {
+        throw new BadRequestException(
+          'Cannot delete user: they have associated records (e.g. requests, attendance, distribution). Deactivate the user instead.',
+        );
+      }
+      throw error;
+    }
   }
 }
 

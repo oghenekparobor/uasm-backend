@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfirmReceiptDto } from './dto/confirm-receipt.dto';
 import { AllocateFoodDto } from './dto/allocate-food.dto';
 import { AuthenticatedUser } from '../../common/types/auth-user.type';
 import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import { PaginationDto, getPaginationParams, createPaginationMeta, PaginatedResponse } from '../../common/dto/pagination.dto';
+
+// Special class ID for Workers group
+const WORKERS_CLASS_ID = '00000000-0000-0000-0000-00000000WORK';
 
 @Injectable()
 export class DistributionService {
@@ -117,16 +120,43 @@ export class DistributionService {
         throw new NotFoundException(`Distribution batch with ID ${dto.distributionBatchId} not found`);
       }
 
-      const allocation = await tx.classDistribution.create({
-        data: {
+      if (dto.classId === WORKERS_CLASS_ID) {
+        throw new BadRequestException('Workers group is no longer supported for allocation.');
+      }
+
+      // Check if allocation already exists (for update scenario)
+      const existingAllocation = await tx.classDistribution.findFirst({
+        where: {
           distributionBatchId: dto.distributionBatchId,
           classId: dto.classId,
-          foodAllocated: dto.foodAllocated,
-          waterAllocated: dto.waterAllocated,
-          allocationType: dto.allocationType,
-          distributedBy: user.id,
         },
       });
+
+      let allocation;
+      if (existingAllocation) {
+        // Update existing allocation
+        allocation = await tx.classDistribution.update({
+          where: { id: existingAllocation.id },
+          data: {
+            foodAllocated: dto.foodAllocated,
+            waterAllocated: dto.waterAllocated,
+            allocationType: dto.allocationType,
+            distributedBy: user.id,
+          },
+        });
+      } else {
+        // Create new allocation
+        allocation = await tx.classDistribution.create({
+          data: {
+            distributionBatchId: dto.distributionBatchId,
+            classId: dto.classId,
+            foodAllocated: dto.foodAllocated,
+            waterAllocated: dto.waterAllocated,
+            allocationType: dto.allocationType,
+            distributedBy: user.id,
+          },
+        });
+      }
 
       // Log distribution allocation (outside transaction)
       try {
@@ -334,8 +364,9 @@ export class DistributionService {
       },
     });
 
-    // Get all classes with their current member counts
+    // Get all classes with their current member counts (exclude synthetic Workers class)
     const allClasses = await this.prisma.class.findMany({
+      where: { id: { not: WORKERS_CLASS_ID } },
       include: {
         _count: {
           select: {

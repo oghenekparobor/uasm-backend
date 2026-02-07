@@ -134,12 +134,16 @@ model Member {
   id               String    @id @default(uuid())
   firstName        String    @map("first_name")
   lastName         String    @map("last_name")
-  birthday         DateTime?
+  birthday         DateTime? @map("birthday")
   phone            String?
   email            String?
   address          String?   @db.Text
   emergencyContact String?   @map("emergency_contact") @db.Text
   photoUrl         String?   @map("photo_url")
+  occupation       String?   @map("occupation")
+  status           String?   @map("status")
+  age              Int?      @map("age")
+  gender           String?   @map("gender")
   currentClassId   String    @map("current_class_id")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
@@ -156,6 +160,7 @@ model Member {
   @@index([birthday])
   @@index([phone])
   @@index([email])
+  @@index([status])
   @@map("members")
 }
 

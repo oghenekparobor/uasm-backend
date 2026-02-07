@@ -35,6 +35,23 @@ export class MembersController {
     return this.membersService.create(createMemberDto, user);
   }
 
+  @Post('upload-csv')
+  @UseInterceptors(
+    FileUploadInterceptor({
+      fieldName: 'file',
+      maxSize: 10 * 1024 * 1024,
+      allowedMimeTypes: ['text/csv', 'application/csv', 'text/plain', 'application/vnd.ms-excel'],
+      required: true,
+    }),
+  )
+  @HttpCode(HttpStatus.OK)
+  async uploadCsv(
+    @UploadedFile() file: Express.Multer.File,
+    @AuthUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.importFromCsv(file.buffer, user);
+  }
+
   @Get()
   findAll(@Query() filters: MemberFilterDto, @AuthUser() user: AuthenticatedUser) {
     return this.membersService.findAll(filters, user);
