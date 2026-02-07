@@ -515,10 +515,14 @@ export class MembersService {
     });
   }
 
+  /** Chunk size for CSV import; each chunk runs in its own short transaction to avoid timeout. */
+  private static readonly CSV_IMPORT_CHUNK_SIZE = 200;
+
   /**
    * Import members from CSV. Only admin and super_admin can use this.
    * Required per row: First name, Last name, Platoon (others are optional; missing values are set to null).
-   * Uses in-memory class cache (load all platoon classes once) and creates classes by name if missing.
+   * Resolves all platoon classes in one short transaction, then creates members in chunked transactions
+   * so large files do not hit the interactive transaction timeout.
    * Maps: next of kin -> emergency_contact; nearest bus stop appended to address.
    */
   async importFromCsv(
@@ -550,100 +554,133 @@ export class MembersService {
     const errors: { row: number; message: string }[] = [];
 
     try {
-      return await this.prisma.withRLSContext(
+      // Phase 1: Resolve all platoon classes in one short transaction (load + create missing).
+      const uniquePlatoons = new Set<string>();
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const firstName = getRowValue(row, 'First Name', 'First name');
+        const lastName = getRowValue(row, 'Last Name', 'Lastname', 'Last name');
+        const platoon = getRowValue(row, 'Platoon');
+        if (firstName && lastName && platoon) {
+          uniquePlatoons.add(platoon.trim());
+        }
+      }
+
+      const classCache = await this.prisma.withRLSContext(
         user,
         async (tx) => {
-        const classCache = new Map<string, string>();
-        const allClasses = await tx.class.findMany({
-          where: {
-            type: ClassType.PLATOON,
-            id: { not: WORKERS_CLASS_ID },
-          },
-          select: { id: true, name: true },
-        });
-        allClasses.forEach((c) => classCache.set(c.name.trim(), c.id));
-
-        async function getOrCreateClassId(platoonName: string): Promise<string | null> {
-          const name = (platoonName || '').trim();
-          if (!name) return null;
-          let id = classCache.get(name);
-          if (id) return id;
-          const created = await tx.class.create({
-            data: { name, type: ClassType.PLATOON },
-            select: { id: true },
+          const cache = new Map<string, string>();
+          const allClasses = await tx.class.findMany({
+            where: {
+              type: ClassType.PLATOON,
+              id: { not: WORKERS_CLASS_ID },
+            },
+            select: { id: true, name: true },
           });
-          classCache.set(name, created.id);
-          return created.id;
-        }
-
-        let created = 0;
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          const rowNum = i + 2;
-          const firstName = getRowValue(row, 'First Name', 'First name');
-          const lastName = getRowValue(row, 'Last Name', 'Lastname', 'Last name');
-          const platoon = getRowValue(row, 'Platoon');
-          if (!firstName || !lastName || !platoon) {
-            errors.push({
-              row: rowNum,
-              message: 'Skipped: missing required First name, Last name, or Platoon.',
+          allClasses.forEach((c) => cache.set(c.name.trim(), c.id));
+          for (const name of uniquePlatoons) {
+            if (!name || cache.has(name)) continue;
+            const created = await tx.class.create({
+              data: { name, type: ClassType.PLATOON },
+              select: { id: true },
             });
-            continue;
+            cache.set(name, created.id);
           }
-          let classId: string | null = null;
-          try {
-            classId = await getOrCreateClassId(platoon);
-          } catch (err: any) {
-            errors.push({ row: rowNum, message: `Platoon "${platoon}": ${err?.message ?? 'Failed to get or create class.'}` });
-            continue;
-          }
-          if (!classId) {
-            errors.push({ row: rowNum, message: 'Skipped: Platoon name is empty.' });
-            continue;
-          }
-          const dob = getRowValue(row, 'Date of Birth');
-          const birthday = dob ? parseCsvDate(dob) : null;
-          const address = getRowValue(row, 'Address');
-          const nearestBusStop = getRowValue(row, 'Nearest Bus-stop', 'Nearest Bus-stop');
-          const addressWithBusStop =
-            address && nearestBusStop
-              ? `${address}, Nearest bus stop: ${nearestBusStop}`
-              : address || null;
-          const phone = getRowValue(row, 'Phone Number', 'Phone number') || null;
-          const gender = getRowValue(row, 'Gender') || null;
-          const nextOfKin = getRowValue(row, 'Next of Kin (Name and Contact)', 'Next of Kin (Name and Contact)') || null;
-          const occupation = getRowValue(row, 'Occupation') || null;
-          const status = getRowValue(row, 'Marital Status') || null;
-          const ageStr = getRowValue(row, 'Age');
-          const age = ageStr ? parseInt(ageStr, 10) : null;
-          const validAge = age != null && !isNaN(age) && age >= 0 && age <= 150 ? age : null;
-
-          try {
-            await tx.member.create({
-              data: {
-                firstName,
-                lastName,
-                birthday: birthday ?? null,
-                phone,
-                email: null,
-                address: addressWithBusStop,
-                emergencyContact: nextOfKin,
-                occupation,
-                status,
-                age: validAge,
-                gender,
-                currentClassId: classId,
-              } as Prisma.MemberUncheckedCreateInput,
-            });
-            created++;
-          } catch (err) {
-            errors.push({ row: rowNum, message: err?.message || 'Failed to create member.' });
-          }
-        }
-      return { created, errors };
+          return cache;
         },
-        { timeout: 60_000 },
+        { timeout: 15_000 },
       );
+
+      // Phase 2: Build pending members (no DB); collect validation errors.
+      type PendingMember = { rowNum: number; data: Prisma.MemberUncheckedCreateInput };
+      const pending: PendingMember[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2;
+        const firstName = getRowValue(row, 'First Name', 'First name');
+        const lastName = getRowValue(row, 'Last Name', 'Lastname', 'Last name');
+        const platoon = getRowValue(row, 'Platoon');
+        if (!firstName || !lastName || !platoon) {
+          errors.push({
+            row: rowNum,
+            message: 'Skipped: missing required First name, Last name, or Platoon.',
+          });
+          continue;
+        }
+        const classId = classCache.get(platoon.trim()) ?? null;
+        if (!classId) {
+          errors.push({ row: rowNum, message: 'Skipped: Platoon name is empty or invalid.' });
+          continue;
+        }
+        const dob = getRowValue(row, 'Date of Birth');
+        const birthday = dob ? parseCsvDate(dob) : null;
+        const address = getRowValue(row, 'Address');
+        const nearestBusStop = getRowValue(row, 'Nearest Bus-stop', 'Nearest Bus-stop');
+        const addressWithBusStop =
+          address && nearestBusStop
+            ? `${address}, Nearest bus stop: ${nearestBusStop}`
+            : address || null;
+        const phone = getRowValue(row, 'Phone Number', 'Phone number') || null;
+        const gender = getRowValue(row, 'Gender') || null;
+        const nextOfKin = getRowValue(row, 'Next of Kin (Name and Contact)', 'Next of Kin (Name and Contact)') || null;
+        const occupation = getRowValue(row, 'Occupation') || null;
+        const status = getRowValue(row, 'Marital Status') || null;
+        const ageStr = getRowValue(row, 'Age');
+        const age = ageStr ? parseInt(ageStr, 10) : null;
+        const validAge = age != null && !isNaN(age) && age >= 0 && age <= 150 ? age : null;
+        pending.push({
+          rowNum,
+          data: {
+            firstName,
+            lastName,
+            birthday: birthday ?? null,
+            phone,
+            email: null,
+            address: addressWithBusStop,
+            emergencyContact: nextOfKin,
+            occupation,
+            status,
+            age: validAge,
+            gender,
+            currentClassId: classId,
+          } as Prisma.MemberUncheckedCreateInput,
+        });
+      }
+
+      // Phase 3: Create members in chunked transactions. Use createMany per chunk for speed; fall back to one-by-one if batch fails.
+      let created = 0;
+      const chunkSize = MembersService.CSV_IMPORT_CHUNK_SIZE;
+      for (let offset = 0; offset < pending.length; offset += chunkSize) {
+        const chunk = pending.slice(offset, offset + chunkSize);
+        const result = await this.prisma.withRLSContext(
+          user,
+          async (tx) => {
+            const batchData = chunk.map((p) => p.data);
+            try {
+              const { count } = await tx.member.createMany({ data: batchData, skipDuplicates: false });
+              return { created: count, errors: [] as { row: number; message: string }[] };
+            } catch {
+              // Batch failed (e.g. constraint); insert one-by-one to get per-row errors.
+              let chunkCreated = 0;
+              const chunkErrors: { row: number; message: string }[] = [];
+              for (const { rowNum, data } of chunk) {
+                try {
+                  await tx.member.create({ data });
+                  chunkCreated++;
+                } catch (err: any) {
+                  chunkErrors.push({ row: rowNum, message: err?.message || 'Failed to create member.' });
+                }
+              }
+              return { created: chunkCreated, errors: chunkErrors };
+            }
+          },
+          { timeout: 30_000 },
+        );
+        created += result.created;
+        errors.push(...result.errors);
+      }
+
+      return { created, errors };
     } catch (err: any) {
       this.logger.error(`CSV import failed: ${err?.message || err}`, err?.stack);
       throw new InternalServerErrorException(
