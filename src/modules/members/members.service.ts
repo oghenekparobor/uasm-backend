@@ -550,7 +550,9 @@ export class MembersService {
     const errors: { row: number; message: string }[] = [];
 
     try {
-      return await this.prisma.withRLSContext(user, async (tx) => {
+      return await this.prisma.withRLSContext(
+        user,
+        async (tx) => {
         const classCache = new Map<string, string>();
         const allClasses = await tx.class.findMany({
           where: {
@@ -639,7 +641,9 @@ export class MembersService {
           }
         }
       return { created, errors };
-    });
+        },
+        { timeout: 60_000 },
+      );
     } catch (err: any) {
       this.logger.error(`CSV import failed: ${err?.message || err}`, err?.stack);
       throw new InternalServerErrorException(

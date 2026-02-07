@@ -91,15 +91,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    * 
    * @param userOrFn - The authenticated user/JWT claims, OR the function to execute (for backward compat)
    * @param fn - The function to execute within the transaction (optional if first param is function)
+   * @param transactionOptions - Optional. Use for long-running work (e.g. CSV import): { timeout: 60000 } (ms)
    */
   async withRLSContext<T>(
     userOrFn: AuthenticatedUser | JwtClaims | undefined | ((tx: any) => Promise<T>),
-    fn?: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
+    fn?: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
+    transactionOptions?: { timeout?: number; maxWait?: number }
   ): Promise<T> {
     // Handle backward compatibility: if first param is a function, use it as the fn with no user context
     let user: AuthenticatedUser | JwtClaims | undefined;
     let actualFn: (tx: any) => Promise<T>;
-    
+
     if (typeof userOrFn === 'function') {
       user = undefined;
       actualFn = userOrFn;
@@ -108,29 +110,27 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       user = userOrFn;
       actualFn = fn!;
     }
-    
+
     const claims = this.getRLSClaimsFromUser(user);
-    
-    return this.$transaction(async (tx) => {
-      // Set RLS context at the START of the transaction on the same connection
-      // This ensures all subsequent queries in the transaction have the correct context
-      if (claims) {
-        // Use $executeRawUnsafe to set context - this executes on the transaction's connection
-        await tx.$executeRawUnsafe(
-          `SELECT set_config('request.jwt.claims', $1, true)`,
-          JSON.stringify(claims),
-        );
-        this.logger.debug(`RLS context set in transaction for role: ${claims.role}`);
-      } else {
-        await tx.$executeRawUnsafe(
-          `SELECT set_config('request.jwt.claims', '{}', true)`,
-        );
-      }
-      
-      // Execute the function with RLS context set
-      // All queries in fn() will use the same connection and have the RLS context
-      return actualFn(tx);
-    });
+
+    return this.$transaction(
+      async (tx) => {
+        // Set RLS context at the START of the transaction on the same connection
+        if (claims) {
+          await tx.$executeRawUnsafe(
+            `SELECT set_config('request.jwt.claims', $1, true)`,
+            JSON.stringify(claims),
+          );
+          this.logger.debug(`RLS context set in transaction for role: ${claims.role}`);
+        } else {
+          await tx.$executeRawUnsafe(
+            `SELECT set_config('request.jwt.claims', '{}', true)`,
+          );
+        }
+        return actualFn(tx);
+      },
+      transactionOptions,
+    );
   }
 
 }
